@@ -1,0 +1,18 @@
+{
+  "name": "@release-toolkit/cli",
+  "version": "0.0.0",
+  "description": "CLI entry point for release-toolkit",
+  "type": "module",
+  "bin": "./dist/index.js",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsdown --config tsdown.config.ts",
+    "dev": "tsdown --config tsdown.config.ts --watch"
+  },
+  "files": ["dist"],
+  "dependencies": {
+    "@release-toolkit/core": "workspace:*",
+    "@release-toolkit/changelog-presets": "workspace:*",
+    "commander": "^13.0.0"
+  }
+}

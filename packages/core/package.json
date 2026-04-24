@@ -1,0 +1,27 @@
+{
+  "name": "@release-toolkit/core",
+  "version": "0.0.0",
+  "description": "Core library: version diff, changelog engine, plugin system, CI layer",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown --config tsdown.config.ts",
+    "dev": "tsdown --config tsdown.config.ts --watch",
+    "test": "vitest run"
+  },
+  "files": ["dist"],
+  "dependencies": {
+    "semver": "^7.6.0",
+    "simple-git": "^3.25.0"
+  },
+  "optionalDependencies": {
+    "octokit": "^4.0.0"
+  }
+}
