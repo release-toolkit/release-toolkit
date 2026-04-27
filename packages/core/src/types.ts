@@ -58,24 +58,22 @@ export interface ChangeLogOutput {
 // Plugin Types
 // ============================================================
 
-export interface PluginContext {
-  cwd: string;
-  options?: Record<string, unknown>;
-}
-
 export interface IPlugin {
   name: string;
   priority: number;
-  init?(context: PluginContext): void | Promise<void>;
 }
 
 /** Stage 1: transform each entry individually. Return null to drop the entry. */
 export interface ILineFormatter extends IPlugin {
+  /** Formatter type identifier for runtime discrimination */
+  __formatterType?: 'line';
   format(entry: ChangeLogEntry): ChangeLogEntry | null;
 }
 
 /** Stage 2: post-process the entire changelog document structure. */
 export interface ILogFormatter extends IPlugin {
+  /** Formatter type identifier for runtime discrimination */
+  __formatterType?: 'log';
   format(changelog: ChangeLogOutput): ChangeLogOutput;
 }
 
@@ -107,7 +105,17 @@ export interface CiRunnerOptions {
   commentPr: boolean;
   dryRun: boolean;
   plugins: string[];
-  pluginOptions: Record<string, unknown>;
+  fileWriteMode: FileWriteMode;
+  /** Create and push git tags for changed packages (default: true) */
+  createTags?: boolean;
+  /** Create GitHub Release after tagging (default: true).
+   *  Works independently of createTags: when tags are disabled,
+   *  derives release targets from version diffs directly. */
+  createRelease?: boolean;
+  /** Hook scripts to run after each GitHub Release is created.
+   *  Environment variables injected: RELEASE_ID, RELEASE_UPLOAD_URL,
+   *  RELEASE_TAG_NAME, RELEASE_HTML_URL, PACKAGE_NAME, PACKAGE_VERSION */
+  afterRelease?: string[];
 }
 
 // ============================================================

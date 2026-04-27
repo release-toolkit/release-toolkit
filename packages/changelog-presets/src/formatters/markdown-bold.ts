@@ -3,6 +3,7 @@ import { ILineFormatter, ChangeLogEntry } from '@release-toolkit/core';
 export const markdownBoldPlugin: ILineFormatter = {
   name: 'markdown-bold',
   priority: 15,
+  __formatterType: 'line',
 
   format(entry: ChangeLogEntry): ChangeLogEntry | null {
     if (!entry.scope) {

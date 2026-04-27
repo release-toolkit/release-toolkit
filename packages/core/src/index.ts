@@ -9,7 +9,6 @@ export type {
   IPlugin,
   ILineFormatter,
   ILogFormatter,
-  PluginContext,
   GithubContext,
   CiRunnerOptions,
   FileWriteMode,
@@ -19,9 +18,6 @@ export type {
 // Constants
 export {
   DEFAULT_BASE_REF,
-  FALLBACK_BASE_REFS,
-  PACKAGE_JSON_GLOB,
-  DEFAULT_CHANGELOG_FILE,
   DEFAULT_CHANGELOG_DIR,
   COMMENT_ANCHOR_START,
   COMMENT_ANCHOR_END,
@@ -42,6 +38,21 @@ export { ChangelogCollector } from './changelog/collector.js';
 export { ChangelogRenderer } from './changelog/renderer.js';
 export type { RendererOptions } from './changelog/renderer.js';
 export { ChangelogFileReader } from './changelog/file-reader.js';
+export { saveReleaseSummary, listReleaseSummaries } from './changelog/history.js';
+export { renderPRChangelogMD, savePRChangelog, listPRChangeLogs, RELEASE_LOG_START, RELEASE_LOG_END, extractReleaseLog } from './changelog/pr-changelog-template.js';
+export { fetchPRData } from './changelog/pr-fetcher.js';
+export type {
+  PRChangelogData,
+  PRMeta,
+  CommitTitle,
+  PRReviewNote,
+  PRRelatedInfo,
+} from './changelog/pr-changelog-types.js';
+export type { PRFetcherOptions } from './changelog/pr-fetcher.js';
+
+// Config
+export { loadConfig, CONFIG_DIR, CONFIG_FILE } from './config/index.js';
+export type { ReleaseToolkitConfig } from './config/index.js';
 
 // Plugin
 export { PluginManager } from './plugin/plugin-manager.js';
@@ -55,3 +66,15 @@ export { FileOutputter } from './output/file-outputter.js';
 // CI Runner
 export { CiRunner } from './ci/ci-runner.js';
 export type { CiRunResult } from './ci/ci-runner.js';
+
+// Tag
+export { TagManager } from './tag/tag-manager.js';
+export type { TagResult, TagManagerOptions } from './tag/tag-manager.js';
+
+// Publish
+export { GithubReleaseCreator } from './publish/github-release-creator.js';
+export type {
+  ReleaseHookContext,
+  GithubReleaseOptions,
+  GithubReleaseResult,
+} from './publish/github-release-creator.js';

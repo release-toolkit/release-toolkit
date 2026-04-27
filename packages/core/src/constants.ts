@@ -1,15 +1,6 @@
 /** Default git base branch for version comparison */
 export const DEFAULT_BASE_REF = 'main';
 
-/** Fallback base branch name */
-export const FALLBACK_BASE_REFS = ['main', 'master', 'develop'] as const;
-
-/** Default glob pattern for package.json in monorepo */
-export const PACKAGE_JSON_GLOB = '**/package.json';
-
-/** Default changelog output filename */
-export const DEFAULT_CHANGELOG_FILE = 'CHANGELOG.md';
-
 /** Default directory for accumulated changelog JSON files */
 export const DEFAULT_CHANGELOG_DIR = '.changelog';
 
@@ -18,7 +9,7 @@ export const COMMENT_ANCHOR_START = '<!-- release-tool-report-start -->';
 export const COMMENT_ANCHOR_END = '<!-- release-tool-report-end -->';
 
 /** Default plugins enabled in CI mode */
-export const DEFAULT_PLUGINS = ['emoji-prefix', 'category-group'] as const;
+export const DEFAULT_PLUGINS = ['emoji-prefix', 'category-group', 'markdown-bold'] as const;
 
 /** Emoji mapping for commit types */
 export const COMMIT_TYPE_EMOJI: Record<string, string> = {

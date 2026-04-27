@@ -22,6 +22,7 @@ function getCategoryName(type: string): string {
 export const categoryGroupPlugin: ILogFormatter = {
   name: 'category-group',
   priority: 10,
+  __formatterType: 'log',
 
   format(changelog: ChangeLogOutput): ChangeLogOutput {
     const sorted = [...changelog.entries].sort((a, b) => {

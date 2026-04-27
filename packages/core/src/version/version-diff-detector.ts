@@ -1,9 +1,9 @@
 import { PackageVersionInfo, VersionDiffResult, DiffType } from '../types.js';
 import { GitReader } from '../git/git-reader.js';
 import * as semver from 'semver';
-import { readFileSync } from 'node:fs';
-import { resolve, basename, dirname } from 'node:path';
-import { existsSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { DIFF_TYPE_LABELS } from '../constants.js';
 
 export class PackageScanner {
   private baseDir: string;
@@ -117,14 +117,9 @@ export class PackageScanner {
     if (changed.length > 0) {
       for (const result of changed) {
         const { package: pkg, diffType } = result;
-        const labelMap: Record<string, string> = {
-          major: '🔴 MAJOR',
-          minor: '🟡 MINOR',
-          patch: '🟢 PATCH',
-        };
-        const label = labelMap[diffType!];
+        const label = DIFF_TYPE_LABELS[diffType!];
         lines.push(
-          `  ${pkg.packageName.padEnd(25)} ${pkg.currentVersion} → ${pkg.newVersion.padEnd(12)} [${label}]`,
+          `  ${pkg.packageName.padEnd(25)} ${pkg.currentVersion} → ${pkg.newVersion.padEnd(12)} [${label ? `${label.emoji} ${label.label}` : diffType!}]`,
         );
       }
       lines.push('');

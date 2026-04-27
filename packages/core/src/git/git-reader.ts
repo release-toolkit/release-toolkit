@@ -52,56 +52,42 @@ export class GitReader {
     }
   }
 
-  /** Check if a branch/ref exists */
-  async refExists(ref: string): Promise<boolean> {
-    try {
-      await this.git.revparse(['--verify', ref]);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
   /** Create a git tag */
   async tag(tagName: string, message?: string): Promise<void> {
-    if (message) {
-      await this.git.tag(['-a', tagName, '-m', message]);
-    } else {
-      await this.git.addTag(tagName);
+    try {
+      if (message) {
+        await this.git.tag(['-a', tagName, '-m', message]);
+      } else {
+        await this.git.addTag(tagName);
+      }
+    } catch (error) {
+      console.error(`[GitReader] Failed to create tag ${tagName}:`, error);
+      throw error; // Re-throw so caller can decide whether to continue
     }
   }
 
   /** Push tags to remote */
   async pushTags(remote?: string): Promise<void> {
-    const remoteName = remote || 'origin';
-    await this.git.push([remoteName, '--tags']);
-  }
-
-  /** Push commits to remote */
-  async push(remote?: string, branch?: string): Promise<void> {
-    const remoteName = remote || 'origin';
-    const args = [remoteName];
-    if (branch) {
-      args.push(branch);
-    }
-    await this.git.push(args);
-  }
-
-  /** Get git log entries between two refs */
-  async log(from: string, to: string): Promise<{ hash: string; message: string }[]> {
     try {
-      const logResult = await this.git.log({ from, to, '--no-merge': null });
-      return logResult.all.map((commit) => ({
-        hash: commit.hash,
-        message: commit.message,
-      }));
+      const remoteName = remote || 'origin';
+      await this.git.push([remoteName, '--tags']);
     } catch (error) {
-      console.error('[GitReader] log failed:', error);
-      return [];
+      console.error(`[GitReader] Failed to push tags:`, error);
+      throw error;
     }
   }
 
-  getBaseDir(): string {
-    return this.baseDir;
+  /** Get the origin remote URL (e.g. git@github.com:owner/repo.git or https://...) */
+  async getRemoteUrl(remote?: string): Promise<string> {
+    try {
+      const remoteName = remote || 'origin';
+      const url = await this.git.remote(['get-url', remoteName]);
+      return url?.trim() || '';
+    } catch {
+      return '';
+    }
   }
+
 }
+
+

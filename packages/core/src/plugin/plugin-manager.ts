@@ -4,7 +4,6 @@ import {
   ILogFormatter,
   ChangeLogEntry,
   ChangeLogOutput,
-  PluginContext,
 } from '../types.js';
 import { resolve } from 'node:path';
 
@@ -12,10 +11,12 @@ export class PluginManager {
   private lineFormatters: ILineFormatter[] = [];
   private logFormatters: ILogFormatter[] = [];
   private plugins: Map<string, IPlugin> = new Map();
-  private context: PluginContext;
+  private cwd: string;
+  /** Track plugins matched by fallback (no __formatterType) to avoid dual registration */
+  private fallbackMatched = new Set<string>();
 
-  constructor(context: PluginContext) {
-    this.context = context;
+  constructor(cwd: string) {
+    this.cwd = cwd;
   }
 
   /** Register a plugin instance */
@@ -39,14 +40,14 @@ export class PluginManager {
       const module = await import(
         /* @vite-ignore */
         name.startsWith('.') || name.startsWith('/')
-          ? resolveImportPath(this.context.cwd, name)
+          ? resolveImportPath(this.cwd, name)
           : `@release-toolkit/changelog-presets/dist/formatters/${name}.js`
       );
 
       const pluginFactory = module.default || module;
       const plugin =
         typeof pluginFactory === 'function'
-          ? await pluginFactory(this.context.options)
+          ? await pluginFactory()
           : pluginFactory;
 
       if (plugin && typeof plugin.name === 'string') {
@@ -58,40 +59,42 @@ export class PluginManager {
     }
   }
 
-  /** Initialize all registered plugins */
-  async initAll(): Promise<void> {
-    for (const [, plugin] of this.plugins) {
-      if (typeof plugin.init === 'function') {
-        await plugin.init(this.context);
-      }
-    }
-  }
-
-  /** Get sorted line formatters by priority (ascending) */
-  getLineFormatters(): ILineFormatter[] {
-    return [...this.lineFormatters].sort((a, b) => a.priority - b.priority);
-  }
-
-  /** Get sorted log formatters by priority (ascending) */
-  getLogFormatters(): ILogFormatter[] {
-    return [...this.logFormatters].sort((a, b) => a.priority - b.priority);
-  }
-
-  /** Check if a plugin with given name is registered */
-  has(name: string): boolean {
-    return this.plugins.has(name);
-  }
-
   getRegisteredNames(): string[] {
     return Array.from(this.plugins.keys());
   }
 
   private isLineFormatter(plugin: IPlugin): plugin is ILineFormatter {
-    return 'format' in plugin && typeof (plugin as ILineFormatter).format === 'function';
+    const p = plugin as ILineFormatter;
+    if (p.__formatterType !== undefined) {
+      return p.__formatterType === 'line';
+    }
+    // Fallback for plugins without __formatterType: match only once, default to line
+    if ('format' in plugin && typeof p.format === 'function' && !this.fallbackMatched.has(plugin.name)) {
+      this.fallbackMatched.add(plugin.name);
+      console.warn(
+        `[PluginManager] Plugin "${plugin.name}" has no __formatterType. ` +
+          `Defaulting to LineFormatter. Add __formatterType: 'line' or 'log' for explicit discrimination.`,
+      );
+      return true;
+    }
+    return false;
   }
 
   private isLogFormatter(plugin: IPlugin): plugin is ILogFormatter {
-    return 'format' in plugin && typeof (plugin as ILogFormatter).format === 'function';
+    const p = plugin as ILogFormatter;
+    if (p.__formatterType !== undefined) {
+      return p.__formatterType === 'log';
+    }
+    // Fallback: already claimed by isLineFormatter, do not double-register
+    if ('format' in plugin && typeof p.format === 'function' && !this.fallbackMatched.has(plugin.name)) {
+      this.fallbackMatched.add(plugin.name);
+      console.warn(
+        `[PluginManager] Plugin "${plugin.name}" has no __formatterType. ` +
+          `Defaulting to LogFormatter. Add __formatterType: 'line' or 'log' for explicit discrimination.`,
+      );
+      return true;
+    }
+    return false;
   }
 }
 

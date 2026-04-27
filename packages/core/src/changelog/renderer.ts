@@ -53,11 +53,6 @@ export class ChangelogRenderer {
     return lines.join('\n').replace(/\n+$/, '\n');
   }
 
-  /** Render changelog output as JSON string */
-  renderJson(output: ChangeLogOutput, pretty: boolean = true): string {
-    return pretty ? JSON.stringify(output, null, 2) : JSON.stringify(output);
-  }
-
   /** Group entries by category (multiple commit types can map to same category) */
   private groupByCategory(entries: ChangeLogEntry[]): CategoryGroup[] {
     const categoryMap = new Map<string, CategoryGroup>();
