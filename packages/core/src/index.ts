@@ -22,9 +22,7 @@ export {
   COMMENT_ANCHOR_START,
   COMMENT_ANCHOR_END,
   DEFAULT_PLUGINS,
-  COMMIT_TYPE_EMOJI,
   DIFF_TYPE_LABELS,
-  COMMIT_TYPE_CATEGORY,
 } from './constants.js';
 
 // Git
@@ -33,26 +31,38 @@ export { GitReader } from './git/git-reader.js';
 // Version
 export { PackageScanner } from './version/version-diff-detector.js';
 
-// Changelog
-export { ChangelogCollector } from './changelog/collector.js';
-export { ChangelogRenderer } from './changelog/renderer.js';
-export type { RendererOptions } from './changelog/renderer.js';
-export { ChangelogFileReader } from './changelog/file-reader.js';
-export { saveReleaseSummary, listReleaseSummaries } from './changelog/history.js';
-export { renderPRChangelogMD, savePRChangelog, listPRChangeLogs, RELEASE_LOG_START, RELEASE_LOG_END, extractReleaseLog } from './changelog/pr-changelog-template.js';
-export { fetchPRData } from './changelog/pr-fetcher.js';
-export type {
-  PRChangelogData,
-  PRMeta,
-  CommitTitle,
-  PRReviewNote,
-  PRRelatedInfo,
-} from './changelog/pr-changelog-types.js';
-export type { PRFetcherOptions } from './changelog/pr-fetcher.js';
+// Changelog (release-level and PR-level)
+export {
+  ChangelogCollector,
+  ChangelogRenderer,
+  type RendererOptions,
+  saveReleaseSummary,
+  listReleaseSummaries,
+  renderPRChangelogMD,
+  savePRChangelog,
+  listPRChangeLogs,
+  PR_CHANGELOG_DIR,
+  RELEASE_LOG_START,
+  RELEASE_LOG_END,
+  PACKAGES_MARKER,
+  extractReleaseLog,
+  extractDeclaredPackages,
+  type SavePRChangelogOptions,
+  fetchPRData,
+  type PRChangelogData,
+  type PRMeta,
+  type CommitTitle,
+  type PRReviewNote,
+  type PRRelatedInfo,
+  type PRFetcherOptions,
+  consumeAllSnapshots,
+  collectEntriesFromSnapshots,
+  type ConsumedSnapshot,
+} from './changelog/index.js';
 
 // Config
-export { loadConfig, CONFIG_DIR, CONFIG_FILE } from './config/index.js';
-export type { ReleaseToolkitConfig } from './config/index.js';
+export { loadConfig, loadPRChangelogConfig, initConfig, CONFIG_DIR, CONFIG_FILE } from './config/index.js';
+export type { ReleaseToolkitConfig, PRChangelogConfig } from './config/index.js';
 
 // Plugin
 export { PluginManager } from './plugin/plugin-manager.js';

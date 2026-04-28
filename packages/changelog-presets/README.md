@@ -53,6 +53,19 @@ const renderer = new ChangelogRenderer({
 });
 ```
 
+## 导出常量
+
+从 `@release-toolkit/changelog-presets` 也可以导入格式化常量：
+
+```typescript
+import { COMMIT_TYPE_EMOJI, COMMIT_TYPE_CATEGORY } from '@release-toolkit/changelog-presets';
+```
+
+| 常量 | 说明 |
+|------|------|
+| `COMMIT_TYPE_EMOJI` | commit 类型到 emoji 的映射 |
+| `COMMIT_TYPE_CATEGORY` | commit 类型到分类的映射 |
+
 ## 顺序
 
 插件按 `priority` 执行：`emojiPrefix(10) → markdownBold(15) → categoryGroup(10)`

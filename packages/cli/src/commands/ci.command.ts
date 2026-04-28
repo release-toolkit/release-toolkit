@@ -3,23 +3,15 @@ import { CiRunner } from '@release-toolkit/core';
 
 export const ciCommand: Command = new Command('ci')
   .description(
-    `CI mode: detect version changes → generate changelog → create tags → create GitHub Release → run hooks
-
-Full pipeline:
-  1. Detect version changes from package.json diffs
-  2. Read changelog files, format via plugins
-  3. Write CHANGELOG.md, post PR comment
-  4. Create git tags for changed packages (@pkg@version format)
-  5. Create GitHub Release (auto-detects prerelease from versions)
-  6. Run afterRelease hooks with release info as env vars
+    `Full CI pipeline: version detection → changelog → write file → git tags → GitHub Release → hooks
 
 Examples:
-  release ci
-  release ci --base develop
-  release ci --dry-run`,
+  release ci                              # full pipeline (reads config from .releasetoolkit/config.json)
+  release ci --base dev                   # compare against 'dev' branch
+  release ci --dry-run                   # preview output without side effects`,
   )
   .option('-b, --base <ref>', 'Base branch/commit to compare against', 'main')
-  .option('--dry-run', 'Preview output without writing files or posting comments', false)
+  .option('--dry-run', 'Preview output without writing files, creating tags, or posting comments', false)
   .action(async (options) => {
     try {
       const runner = new CiRunner(

@@ -36,6 +36,7 @@ console.log(result.changelog);
 
 ## 导出常量
 
-- `COMMIT_TYPE_EMOJI` - commit 类型对应的 emoji
-- `COMMIT_TYPE_CATEGORY` - commit 类型到分类的映射
 - `DEFAULT_PLUGINS` - 默认插件列表
+- `DIFF_TYPE_LABELS` - 版本差异类型的显示标签
+
+> **注意**: 格式化相关常量（`COMMIT_TYPE_EMOJI`、`COMMIT_TYPE_CATEGORY`）已移至 `@release-toolkit/changelog-presets` 包。

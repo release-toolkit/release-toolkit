@@ -1,5 +1,5 @@
 import { ILineFormatter, ChangeLogEntry } from '@release-toolkit/core';
-import { COMMIT_TYPE_EMOJI } from '@release-toolkit/core';
+import { COMMIT_TYPE_EMOJI } from '../constants.js';
 
 export const emojiPrefixPlugin: ILineFormatter = {
   name: 'emoji-prefix',

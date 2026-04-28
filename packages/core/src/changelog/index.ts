@@ -1,30 +1,9 @@
-export { ChangelogCollector } from './collector.js';
-export { ChangelogRenderer } from './renderer.js';
-export type { RendererOptions } from './renderer.js';
-export { ChangelogFileReader } from './file-reader.js';
+// ============================================================
+// Changelog module — unified exports
+// ============================================================
 
-// Release history (per-release summary)
-export { saveReleaseSummary, listReleaseSummaries } from './history.js';
+// Release-level changelog (ci / preview commands use these)
+export * from './release/index.js';
 
-// PR-level changelog (per-PR change record)
-export {
-  renderPRChangelogMD,
-  savePRChangelog,
-  listPRChangeLogs,
-  PR_CHANGELOG_DIR,
-  RELEASE_LOG_START,
-  RELEASE_LOG_END,
-  PACKAGES_MARKER,
-  extractReleaseLog,
-  extractDeclaredPackages,
-} from './pr-changelog-template.js';
-export type { SavePRChangelogOptions } from './pr-changelog-template.js';
-export type {
-  PRChangelogData,
-  PRMeta,
-  CommitTitle,
-  PRReviewNote,
-  PRRelatedInfo,
-} from './pr-changelog-types.js';
-export { fetchPRData } from './pr-fetcher.js';
-export type { PRFetcherOptions } from './pr-fetcher.js';
+// PR-level changelog (pr-changelog command uses these)
+export * from './pr/index.js';

@@ -3,12 +3,12 @@
   "version": "0.0.0",
   "description": "Core library: version diff, changelog engine, plugin system, CI layer",
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
     }
   },
   "scripts": {
@@ -16,7 +16,7 @@
     "dev": "tsdown --config tsdown.config.ts --watch",
     "test": "vitest run"
   },
-  "files": ["dist"],
+  "files": ["dist", "README.md"],
   "dependencies": {
     "semver": "^7.6.0",
     "simple-git": "^3.25.0"

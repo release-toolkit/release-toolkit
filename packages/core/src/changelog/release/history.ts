@@ -1,8 +1,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { VersionDiffResult } from '../types.js';
-import { CONFIG_DIR } from '../config/index.js';
-import { DIFF_TYPE_LABELS } from '../constants.js';
+import { VersionDiffResult } from '../../types.js';
+import { CONFIG_DIR } from '../../config/index.js';
+import { DIFF_TYPE_LABELS } from '../../constants.js';
 
 /** Directory for release-level changelog summaries */
 export const RELEASE_HISTORY_DIR = 'changelog/releases';

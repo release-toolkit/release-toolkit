@@ -4,6 +4,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { ciCommand } from './commands/ci.command.js';
+import { previewCommand } from './commands/preview.command.js';
+import { initCommand } from './commands/init.command.js';
+import { prChangelogCommand } from './commands/pr-changelog.command.js';
 
 const program = new Command();
 
@@ -18,6 +21,9 @@ program
 
 // Register commands
 program.addCommand(ciCommand);
+program.addCommand(previewCommand);
+program.addCommand(initCommand);
+program.addCommand(prChangelogCommand);
 
 // Parse and execute
 program.parseAsync().catch((err) => {

@@ -2,8 +2,6 @@ import {
   IPlugin,
   ILineFormatter,
   ILogFormatter,
-  ChangeLogEntry,
-  ChangeLogOutput,
 } from '../types.js';
 import { resolve } from 'node:path';
 
@@ -12,8 +10,6 @@ export class PluginManager {
   private logFormatters: ILogFormatter[] = [];
   private plugins: Map<string, IPlugin> = new Map();
   private cwd: string;
-  /** Track plugins matched by fallback (no __formatterType) to avoid dual registration */
-  private fallbackMatched = new Set<string>();
 
   constructor(cwd: string) {
     this.cwd = cwd;
@@ -21,14 +17,29 @@ export class PluginManager {
 
   /** Register a plugin instance */
   register(plugin: IPlugin): void {
-    this.plugins.set(plugin.name, plugin);
-
-    if (this.isLineFormatter(plugin)) {
-      this.lineFormatters.push(plugin);
+    if (this.plugins.has(plugin.name)) {
+      console.warn(`[PluginManager] Plugin "${plugin.name}" already registered, skipping.`);
+      return;
     }
 
-    if (this.isLogFormatter(plugin)) {
-      this.logFormatters.push(plugin);
+    this.plugins.set(plugin.name, plugin);
+
+    const isLine = this.isLineFormatter(plugin);
+    const isLog = this.isLogFormatter(plugin);
+
+    if (isLine && isLog) {
+      console.warn(
+        `[PluginManager] Plugin "${plugin.name}" matches both LineFormatter and LogFormatter. ` +
+        'Consider adding __formatterType to disambiguate.',
+      );
+    }
+
+    if (isLine) {
+      this.lineFormatters.push(plugin as ILineFormatter);
+    }
+
+    if (isLog) {
+      this.logFormatters.push(plugin as ILogFormatter);
     }
   }
 
@@ -63,38 +74,32 @@ export class PluginManager {
     return Array.from(this.plugins.keys());
   }
 
-  private isLineFormatter(plugin: IPlugin): plugin is ILineFormatter {
-    const p = plugin as ILineFormatter;
-    if (p.__formatterType !== undefined) {
-      return p.__formatterType === 'line';
-    }
-    // Fallback for plugins without __formatterType: match only once, default to line
-    if ('format' in plugin && typeof p.format === 'function' && !this.fallbackMatched.has(plugin.name)) {
-      this.fallbackMatched.add(plugin.name);
-      console.warn(
-        `[PluginManager] Plugin "${plugin.name}" has no __formatterType. ` +
-          `Defaulting to LineFormatter. Add __formatterType: 'line' or 'log' for explicit discrimination.`,
-      );
-      return true;
-    }
-    return false;
+  /** Get all registered LineFormatters sorted by priority */
+  getLineFormatters(): ILineFormatter[] {
+    return [...this.lineFormatters].sort((a, b) => a.priority - b.priority);
   }
 
-  private isLogFormatter(plugin: IPlugin): plugin is ILogFormatter {
+  /** Get all registered LogFormatters sorted by priority */
+  getLogFormatters(): ILogFormatter[] {
+    return [...this.logFormatters].sort((a, b) => a.priority - b.priority);
+  }
+
+  private isLineFormatter(plugin: IPlugin): boolean {
+    const p = plugin as ILineFormatter;
+    // Explicit __formatterType takes priority
+    if (p.__formatterType === 'line') return true;
+    if (p.__formatterType === 'log') return false;
+    // Auto-detect by method signature: ILineFormatter has formatLine()
+    return 'formatLine' in plugin && typeof p.formatLine === 'function';
+  }
+
+  private isLogFormatter(plugin: IPlugin): boolean {
     const p = plugin as ILogFormatter;
-    if (p.__formatterType !== undefined) {
-      return p.__formatterType === 'log';
-    }
-    // Fallback: already claimed by isLineFormatter, do not double-register
-    if ('format' in plugin && typeof p.format === 'function' && !this.fallbackMatched.has(plugin.name)) {
-      this.fallbackMatched.add(plugin.name);
-      console.warn(
-        `[PluginManager] Plugin "${plugin.name}" has no __formatterType. ` +
-          `Defaulting to LogFormatter. Add __formatterType: 'line' or 'log' for explicit discrimination.`,
-      );
-      return true;
-    }
-    return false;
+    // Explicit __formatterType takes priority
+    if (p.__formatterType === 'log') return true;
+    if (p.__formatterType === 'line') return false;
+    // Auto-detect by method signature: ILogFormatter has format()
+    return 'format' in plugin && typeof p.format === 'function';
   }
 }
 

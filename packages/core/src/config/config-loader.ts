@@ -3,8 +3,9 @@ import * as path from 'node:path';
 import { CiRunnerOptions } from '../types.js';
 
 /** Default config values (mirrors CiRunner constructor defaults) */
-const DEFAULT_CONFIG: Required<Omit<CiRunnerOptions, 'afterRelease'>> & { afterRelease: string[] } = {
+const DEFAULT_CONFIG: Required<Omit<CiRunnerOptions, 'afterRelease'>> & { afterRelease: string[]; devBranch: string } = {
   baseRef: 'main',
+  devBranch: 'dev',
   changelogDir: '.changelog',
   outputPath: 'CHANGELOG.md',
   commentPr: true,
@@ -33,8 +34,10 @@ export interface PRChangelogConfig {
   packageMap?: Record<string, string>;
 }
 
-/** Shape of the config.json file */
 export interface ReleaseToolkitConfig {
+  /** Development branch name. PRs targeting this branch trigger Stage 1 (save PR changelog). Default: 'dev' */
+  devBranch?: string;
+  /** Base/publish branch name. PRs targeting this branch trigger Stage 2 (preview). Merge to this branch triggers Stage 3 (publish). Default: 'main' */
   baseRef?: string;
   changelogDir?: string;
   outputPath?: string;
@@ -54,6 +57,39 @@ export const CONFIG_DIR = '.releasetoolkit';
 
 /** Config filename */
 export const CONFIG_FILE = 'config.json';
+
+/**
+ * Initialize `.releasetoolkit/config.json` with a minimal template.
+ *
+ * - If file already exists, does nothing (returns false).
+ * - Creates directory and writes minimal JSON (only fields that differ from defaults).
+ *   Users can add more fields as needed — all fields have sensible defaults.
+ */
+export function initConfig(cwd: string): { created: boolean; path: string } {
+  const dir = path.join(cwd, CONFIG_DIR);
+  const filePath = path.join(dir, CONFIG_FILE);
+
+  if (fs.existsSync(filePath)) {
+    return { created: false, path: filePath };
+  }
+
+  fs.mkdirSync(dir, { recursive: true });
+
+  // Minimal template: only include prChangelog section as example
+  // (CI options all have good defaults; PR changelog config is the one users likely want to customize)
+  const template: ReleaseToolkitConfig = {
+    prChangelog: {
+      packagesDir: 'packages',
+      rootTag: 'root',
+    },
+  };
+
+  fs.writeFileSync(filePath, JSON.stringify(template, null, 2) + '\n', 'utf-8');
+
+  console.log(`[Config] Created ${CONFIG_DIR}/${CONFIG_FILE}`);
+
+  return { created: true, path: filePath };
+}
 
 /**
  * Load CI config from `.releasetoolkit/config.json` in the given cwd.
@@ -76,6 +112,7 @@ export function loadConfig(cwd: string, explicitOptions?: Partial<CiRunnerOption
   // Merge: defaults ← file config ← explicit options
   return {
     baseRef: explicitOptions?.baseRef ?? fileConfig.baseRef ?? DEFAULT_CONFIG.baseRef,
+    devBranch: explicitOptions?.devBranch ?? fileConfig.devBranch ?? DEFAULT_CONFIG.devBranch,
     changelogDir: explicitOptions?.changelogDir ?? fileConfig.changelogDir ?? DEFAULT_CONFIG.changelogDir,
     outputPath: explicitOptions?.outputPath ?? fileConfig.outputPath ?? DEFAULT_CONFIG.outputPath,
     commentPr: explicitOptions?.commentPr ?? fileConfig.commentPr ?? DEFAULT_CONFIG.commentPr,

@@ -99,12 +99,21 @@ export interface GithubContext {
 // ============================================================
 
 export interface CiRunnerOptions {
+  /** Base/publish branch (for Stage 2 & 3). Default: 'main' */
   baseRef: string;
+  /** Development branch (for Stage 1). Default: 'dev' */
+  devBranch: string;
+  /** Directory name for changelog source files. Default: '.changelog' */
   changelogDir: string;
+  /** Output file path for the final changelog. Default: 'CHANGELOG.md' */
   outputPath: string;
+  /** Whether to post/update PR comment with release report. Default: true */
   commentPr: boolean;
+  /** Dry-run mode: preview without side effects. Default: false */
   dryRun: boolean;
+  /** Plugin names to apply (in order). Default: ['emoji-prefix', 'category-group', 'markdown-bold'] */
   plugins: string[];
+  /** File write strategy: 'append' or 'overwrite'. Default: 'overwrite' */
   fileWriteMode: FileWriteMode;
   /** Create and push git tags for changed packages (default: true) */
   createTags?: boolean;
