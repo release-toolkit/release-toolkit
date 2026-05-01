@@ -195,7 +195,7 @@ export class GithubReleaseCreator {
     return new Octokit({ auth: token });
   }
 
-  private failedResult(tagName: string, reason: string): GithubReleaseResult {
+  private failedResult(tagName: string, _reason: string): GithubReleaseResult {
     const { packageName, packageVersion } = this.parseTagName(tagName);
     return {
       tagName,

@@ -22,7 +22,7 @@ export class Pipeline {
    */
   async run(entries: ChangeLogEntry[], version: string): Promise<ChangeLogOutput> {
     // Stage 1: LineFormatters - transform each entry
-    let currentEntries = await this.runLineStage(entries);
+    const currentEntries = await this.runLineStage(entries);
 
     // Create initial output from processed entries
     let output: ChangeLogOutput = {

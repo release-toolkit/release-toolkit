@@ -2,7 +2,6 @@ import { CiRunnerOptions, VersionDiffResult } from '../types.js';
 import * as semver from 'semver';
 import { PackageScanner } from '../version/version-diff-detector.js';
 import {
-  ChangelogCollector,
   ChangelogRenderer,
   saveReleaseSummary,
   consumeAllSnapshots,
@@ -17,7 +16,7 @@ import { TagManager } from '../tag/tag-manager.js';
 import { GithubReleaseCreator } from '../publish/github-release-creator.js';
 import { GitReader } from '../git/git-reader.js';
 import { loadConfig } from '../config/index.js';
-import { DEFAULT_BASE_REF, DEFAULT_PLUGINS, DIFF_TYPE_LABELS } from '../constants.js';
+import { DIFF_TYPE_LABELS } from '../constants.js';
 
 export class CiRunner {
   private options: Required<CiRunnerOptions>;

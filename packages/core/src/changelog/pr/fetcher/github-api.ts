@@ -114,7 +114,6 @@ export async function getAllFiles(
   let page = 1;
   const perPage = 100;
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const res = await octokit.rest.pulls.listFiles({
       owner: opts.owner,

@@ -1,5 +1,4 @@
-import type { PRChangelogData, CommitTitle } from '../types.js';
-import { extractReleaseLog, extractDeclaredPackages } from '../comment-parser.js';
+import type { PRChangelogData } from '../types.js';
 import { loadPRChangelogConfig } from '../../../config/index.js';
 import type { PRChangelogConfig } from '../../../config/index.js';
 import { getPR, getCommits, getFirstReviewComment, getAllFiles } from './github-api.js';

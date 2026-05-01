@@ -19,12 +19,6 @@ function resolveValue<T>(optionValue: T | undefined, envKey: string): T | undefi
   return undefined;
 }
 
-/** Read file content and print to stdout */
-function printFile(filePath: string): void {
-  const content = fs.readFileSync(filePath, 'utf-8');
-  process.stdout.write(content);
-}
-
 // ── Main command ──────────────────────────────────────────────
 export const prChangelogCommand: Command = new Command('pr-changelog')
   .description('PR-level changelog: fetch, render, save, and list PR change records');

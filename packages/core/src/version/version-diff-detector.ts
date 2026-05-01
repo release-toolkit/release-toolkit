@@ -110,7 +110,6 @@ export class PackageScanner {
       return lines.join('\n');
     }
 
-    const hasChanges = results.some((r) => r.diffType !== null);
     const unchanged = results.filter((r) => r.diffType === null);
     const changed = results.filter((r) => r.diffType !== null);
 

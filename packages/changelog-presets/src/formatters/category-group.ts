@@ -1,4 +1,4 @@
-import { ILogFormatter, ChangeLogOutput, ChangeLogEntry } from '@release-toolkit/core';
+import { ILogFormatter, ChangeLogOutput } from '@release-toolkit/core';
 import { COMMIT_TYPE_CATEGORY } from '../constants.js';
 
 /** Category display order for grouping */

@@ -1,4 +1,4 @@
-import { FileWriteMode, FileOutputterOptions } from '../types.js';
+import { FileOutputterOptions } from '../types.js';
 import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 
 export class FileOutputter {
