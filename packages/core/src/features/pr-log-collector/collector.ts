@@ -4,7 +4,6 @@ import { resolve } from 'node:path';
 import { loadConfig, type ReleaseToolkitConfig } from '../../shared/config/index.js';
 import type { GithubContext } from '../../shared/types.js';
 import { getPR, updatePR } from '../../shared/github/api-client.js';
-import { postOrUpdateComment } from '../../shared/github/pr-commenter.js';
 import { extractReleaseLog } from './release-log-extractor.js';
 import { formatPRLogComment } from './formatter.js';
 import type { PRLogCollectorOptions, PRLogCollectorResult, PRMeta } from './types.js';
@@ -53,12 +52,6 @@ export async function collectPRLog(
       console.error('[collect] ❌ PR 描述体更新失败:', updateErr);
       throw updateErr; // 重新抛出，让外层 catch 处理
     }
-
-    // 可选：同时更新评论区（用于通知）
-    await postOrUpdateComment(context, commentBody, {
-      markerStart: OUTPUT_START,
-      markerEnd: OUTPUT_END,
-    });
 
     let savedPath: string | undefined;
     if (options.save) {
