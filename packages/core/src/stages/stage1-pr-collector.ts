@@ -61,7 +61,7 @@ export class Stage1PRCollector {
    * Execute Stage 1: Collect PR changelog and optionally post comment
    */
   async run(): Promise<Stage1Result> {
-    const { prNumber, owner, repo, token, cwd } = this.options;
+    const { prNumber } = this.options;
 
     console.log(`\n[Stage1] Starting PR changelog collection for PR #${prNumber}...`);
 
@@ -153,7 +153,7 @@ export class Stage1PRCollector {
       }
     }
 
-    return savedPath;
+    return savedPath ?? undefined;
   }
 
   /**

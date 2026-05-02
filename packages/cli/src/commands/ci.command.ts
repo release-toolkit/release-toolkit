@@ -19,10 +19,9 @@ Examples:
     try {
       const publisher = new Stage3ReleasePublisher(
         {
-          baseRef: options.base,
-          dryRun: options.dryRun,
+          ...options,
+          cwd: process.cwd(),
         },
-        process.cwd(),
       );
 
       const result = await publisher.run();

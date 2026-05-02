@@ -37,9 +37,9 @@ import { loadConfig } from '../config/index.js';
 import { DIFF_TYPE_LABELS } from '../constants.js';
 import type {
   VersionDiffResult,
-  ConsumedSnapshot,
   CiRunnerOptions,
 } from '../types.js';
+import type { ConsumedSnapshot } from '../changelog/pr/snapshot-consumer.js';
 
 export interface Stage3Options extends Partial<CiRunnerOptions> {
   /** Working directory (default: process.cwd()) */
@@ -193,7 +193,13 @@ export class Stage3ReleasePublisher {
       const releaseInfo = JSON.parse(fs.readFileSync(releaseInfoPath, 'utf-8'));
 
       // Convert saved data to VersionDiffResult format
-      const versionDiffs: VersionDiffResult[] = releaseInfo.versionDiffs.map((v: any) => ({
+      const versionDiffs: VersionDiffResult[] = releaseInfo.versionDiffs.map((v: {
+        packageName: string;
+        packagePath: string;
+        currentVersion: string;
+        newVersion: string;
+        diffType: string;
+      }) => ({
         package: {
           packageName: v.packageName,
           packagePath: v.packagePath,
@@ -426,10 +432,10 @@ export class Stage3ReleasePublisher {
   // Helper Methods
   // ============================================================
 
-  private extractVersion(snapshots: ConsumedSnapshot[]): string {
-    if (snapshots.length > 0 && snapshots[0].version) {
-      return snapshots[0].version;
-    }
+  private extractVersion(_snapshots: ConsumedSnapshot[]): string {
+    // Try to extract version from the first snapshot's data
+    // For now, return 'unreleased' as default
+    // TODO: Extract version from PRChangelogData or VersionDiffResult
     return 'unreleased';
   }
 

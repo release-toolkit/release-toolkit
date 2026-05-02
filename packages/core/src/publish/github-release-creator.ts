@@ -177,7 +177,6 @@ export class GithubReleaseCreator {
         await this.asyncExec(script, {
           cwd: this.options.cwd,
           env: { ...process.env, ...envVars },
-          stdio: 'inherit',
         });
         console.log(`[GithubReleaseCreator] Hook completed: ${script}`);
       } catch (error) {

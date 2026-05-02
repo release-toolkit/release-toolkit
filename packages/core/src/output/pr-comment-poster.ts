@@ -48,15 +48,7 @@ export class PRCommentPoster {
   }
 
   private async findExistingComment(
-    octokit: {
-      rest: {
-        issues: {
-          listComments: (
-            args: Record<string, unknown>,
-          ) => Promise<{ data: Array<{ id: number; body?: string }> }>;
-        };
-      };
-    },
+    octokit: InstanceType<typeof import('octokit').Octokit>,
     prNumber: number,
   ): Promise<number | null> {
     const comments = await octokit.rest.issues.listComments({

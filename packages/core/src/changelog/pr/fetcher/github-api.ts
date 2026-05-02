@@ -2,7 +2,7 @@
 // GitHub API types (minimal, internal to fetcher)
 // ============================================================
 
-interface GitHubCommit {
+export interface GitHubCommit {
   sha: string;
   commit?: {
     message: string;
@@ -12,7 +12,7 @@ interface GitHubCommit {
   };
 }
 
-interface GitHubComment {
+export interface GitHubComment {
   id: number;
   user?: {
     login: string;
@@ -22,12 +22,12 @@ interface GitHubComment {
 }
 
 /** File entry from PR listFiles API */
-interface GitHubPRFile {
+export interface GitHubPRFile {
   filename: string;
   status: 'added' | 'modified' | 'removed' | 'renamed';
 }
 
-interface GitHubPRDetail {
+export interface GitHubPRDetail {
   number: number;
   title: string;
   user?: {
