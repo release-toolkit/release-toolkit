@@ -73,9 +73,14 @@ export { GithubContextDetector } from './output/github-context-detector.js';
 export { PRCommentPoster } from './output/pr-comment-poster.js';
 export { FileOutputter } from './output/file-outputter.js';
 
-// CI Runner
+// CI Runner (Deprecated: Use Stage classes instead)
 export { CiRunner } from './ci/ci-runner.js';
 export type { CiRunResult } from './ci/ci-runner.js';
+
+// Stages (New Architecture)
+export { Stage1PRCollector, type Stage1Options, type Stage1Result } from './stages/stage1-pr-collector.js';
+export { Stage2ReleasePreparer, type Stage2Options, type Stage2Result } from './stages/stage2-release-preparer.js';
+export { Stage3ReleasePublisher, type Stage3Options, type Stage3Result } from './stages/stage3-release-publisher.js';
 
 // Tag
 export { TagManager } from './tag/tag-manager.js';

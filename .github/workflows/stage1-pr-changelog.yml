@@ -1,4 +1,4 @@
-name: PR Changelog Detection
+name: Stage 1: PR Changelog Collection
 
 on:
   pull_request:
@@ -10,7 +10,7 @@ permissions:
   pull-requests: write
 
 jobs:
-  detect:
+  collect:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -24,10 +24,14 @@ jobs:
           node-version: '22'
           cache: 'pnpm'
 
-      - run: pnpm install
+      - name: Install dependencies
+        run: pnpm install
 
-      - name: Save PR changelog snapshot
-        run: pnpm release pr-changelog fetch --pr-number ${{ github.event.number }} --save --skip-if-exists
+      - name: Build packages
+        run: pnpm build
+
+      - name: Collect PR changelog and post comment
+        run: pnpm release pr-changelog fetch --pr-number ${{ github.event.number }} --save --skip-if-exists --post-comment
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

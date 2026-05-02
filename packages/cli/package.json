@@ -3,7 +3,9 @@
   "version": "0.0.0",
   "description": "CLI entry point for release-toolkit",
   "type": "module",
-  "bin": "./dist/index.mjs",
+  "bin": {
+    "release": "./dist/index.mjs"
+  },
   "main": "./dist/index.mjs",
   "scripts": {
     "build": "tsdown --config tsdown.config.ts",

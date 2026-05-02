@@ -1,21 +1,21 @@
-name: Release Preview
+name: Stage 2: Release Prepare
 
 on:
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened]
+  push:
+    branches: [dev]
 
 permissions:
   contents: read
   pull-requests: write
 
 jobs:
-  preview:
+  prepare:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: pnpm/action-setup@v5
 
@@ -24,11 +24,13 @@ jobs:
           node-version: '22'
           cache: 'pnpm'
 
-      - run: pnpm install
+      - name: Install dependencies
+        run: pnpm install
 
-      - run: pnpm build
+      - name: Build packages
+        run: pnpm build
 
-      - name: Post release preview
-        run: pnpm release preview
+      - name: Prepare release information
+        run: pnpm release prepare --base main --dev dev
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

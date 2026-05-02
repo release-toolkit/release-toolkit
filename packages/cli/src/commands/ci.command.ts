@@ -1,9 +1,12 @@
 import { Command } from 'commander';
-import { CiRunner } from '@release-toolkit/core';
+import { Stage3ReleasePublisher } from '@release-toolkit/core';
 
 export const ciCommand: Command = new Command('ci')
   .description(
-    `Full CI pipeline: version detection → changelog → write file → git tags → GitHub Release → hooks
+    `Stage 3: Full CI pipeline - publish releases.
+
+Reads config from .releasetoolkit/config.json
+Consumes Stage 2 output from .releasetoolkit/release/info.json
 
 Examples:
   release ci                              # full pipeline (reads config from .releasetoolkit/config.json)
@@ -14,7 +17,7 @@ Examples:
   .option('--dry-run', 'Preview output without writing files, creating tags, or posting comments', false)
   .action(async (options) => {
     try {
-      const runner = new CiRunner(
+      const publisher = new Stage3ReleasePublisher(
         {
           baseRef: options.base,
           dryRun: options.dryRun,
@@ -22,7 +25,7 @@ Examples:
         process.cwd(),
       );
 
-      const result = await runner.run();
+      const result = await publisher.run();
 
       if (!result.success) {
         process.exit(1);

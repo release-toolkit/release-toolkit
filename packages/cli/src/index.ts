@@ -7,6 +7,7 @@ import { ciCommand } from './commands/ci.command.js';
 import { previewCommand } from './commands/preview.command.js';
 import { initCommand } from './commands/init.command.js';
 import { prChangelogCommand } from './commands/pr-changelog.command.js';
+import { prepareCommand } from './commands/prepare.command.js';
 
 const program = new Command();
 
@@ -24,6 +25,7 @@ program.addCommand(ciCommand);
 program.addCommand(previewCommand);
 program.addCommand(initCommand);
 program.addCommand(prChangelogCommand);
+program.addCommand(prepareCommand);
 
 // Parse and execute
 program.parseAsync().catch((err) => {

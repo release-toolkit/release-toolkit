@@ -1,9 +1,7 @@
 import { Command } from 'commander';
 import {
-  fetchPRData,
-  savePRChangelog,
-  listPRChangeLogs,
-  renderPRChangelogMD,
+  Stage1PRCollector,
+  type Stage1Options,
 } from '@release-toolkit/core';
 import type { SavePRChangelogOptions } from '@release-toolkit/core';
 import * as fs from 'node:fs';
@@ -37,7 +35,8 @@ Examples:
   release pr-changelog fetch --pr-number 123
   release pr-changelog fetch --pr-number 123 --owner myorg --repo myrepo
   release pr-changelog fetch --pr-number 123 --save
-  release pr-changelog fetch --pr-number 123 --save --skip-if-exists`,
+  release pr-changelog fetch --pr-number 123 --save --skip-if-exists
+  release pr-changelog fetch --pr-number 123 --post-comment`,
   )
   .requiredOption('--pr-number <number>', 'PR number')
   .option('--owner <owner>', 'GitHub owner/org', '')
@@ -45,6 +44,7 @@ Examples:
   .option('--token <token>', 'GitHub personal access token (or use GITHUB_TOKEN env)')
   .option('--save', 'Save rendered markdown to .releasetoolkit/changelog/prs/', false)
   .option('--skip-if-exists', 'Skip saving if file already exists (implies --save)', false)
+  .option('--post-comment', 'Post/Update PR comment with changelog', false)
   .action(async (options) => {
     try {
       // ── Resolve credentials ──
@@ -77,36 +77,22 @@ Examples:
         process.exit(1);
       }
 
-      // ── Fetch & render ──
-      console.log(`[pr-changelog] Fetching PR #${prNumber} from ${owner}/${repo}...`);
-      const data = await fetchPRData({
+      // ── Use Stage1PRCollector ──
+      const stage1 = new Stage1PRCollector({
+        prNumber,
         owner,
         repo,
         token,
-        prNumber,
+        save: options.save || options.skipIfExists,
+        skipIfExists: options.skipIfExists,
+        postComment: options.postComment,
+        cwd: process.cwd(),
       });
 
-      const md = renderPRChangelogMD(data);
+      const result = await stage1.run();
 
-      // Print to stdout
-      process.stdout.write(md + '\n');
-
-      // ── Optionally save ──
-      const shouldSave = options.save || options.skipIfExists;
-      if (shouldSave) {
-        const saveOptions: SavePRChangelogOptions = {
-          overwrite: options.skipIfExists ? 'skip' : 'overwrite',
-        };
-        const savedPath = savePRChangelog(process.cwd(), data, saveOptions);
-
-        if (savedPath) {
-          const relPath = path.relative(process.cwd(), savedPath);
-          if (fs.existsSync(savedPath) && options.skipIfExists) {
-            console.log(`[pr-changelog] ℹ Skipped (already exists): ${relPath}`);
-          } else {
-            console.log(`[pr-changelog] ✓ Saved: ${relPath}`);
-          }
-        }
+      if (!result.success) {
+        process.exit(1);
       }
     } catch (error) {
       console.error('[pr-changelog fetch] Failed:', error instanceof Error ? error.message : error);
