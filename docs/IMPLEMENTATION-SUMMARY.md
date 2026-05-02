@@ -1,19 +1,28 @@
 # Release Toolkit 三阶段架构实现总结
 
 ## 完成时间
-2026-05-02 11:10
+2026-05-02 11:20
 
 ## 架构概览
 
 ### 三阶段设计
 
 ```
-PR 提交到 dev → Stage 1: 收集 PR 信息并更新评论
+向 dev 提 PR → Stage 1: 收集 PR 信息并更新评论
          ↓
 PR 合并到 dev → Stage 2: 检测 version 变更并生成 release 信息
          ↓
-PR 提交到 main → Stage 3: 发布 GitHub Release 并执行 hooks
+向 main 提 PR → Stage 3: 发布 GitHub Release 并执行 hooks
+         ↓
+PR 合并到 main → 触发 Stage 3 执行
 ```
+
+**关键修改**:
+- ✅ **Stage 1**: 只在向 `dev` 分支提 PR 时触发（`pull_request: branches: [dev]`）
+- ✅ **Stage 2**: 只在 PR 合并到 `dev` 后触发（`pull_request: branches: [dev], types: [closed]` + `if: merged == true`）
+- ✅ **Stage 3**: 只在向 `main` 分支提 PR 并合并后触发（`pull_request: branches: [main], types: [closed]` + `if: merged == true`）
+
+---
 
 ---
 
