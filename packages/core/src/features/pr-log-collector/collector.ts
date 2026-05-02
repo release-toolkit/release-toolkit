@@ -45,7 +45,14 @@ export async function collectPRLog(
 
     // 更新 PR 描述体（幂等）
     const updatedBody = updatePRBody(meta.body, commentBody);
-    await updatePR(context, updatedBody);
+    console.log('[collect] 准备更新 PR 描述体，长度:', updatedBody.length);
+    try {
+      await updatePR(context, updatedBody);
+      console.log('[collect] ✅ PR 描述体更新成功');
+    } catch (updateErr) {
+      console.error('[collect] ❌ PR 描述体更新失败:', updateErr);
+      throw updateErr; // 重新抛出，让外层 catch 处理
+    }
 
     // 可选：同时更新评论区（用于通知）
     await postOrUpdateComment(context, commentBody, {
