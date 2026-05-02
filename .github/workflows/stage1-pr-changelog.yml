@@ -30,8 +30,18 @@ jobs:
       - name: Build packages
         run: pnpm build
 
+      - name: Debug PR event info
+        run: |
+          echo "PR Number: ${{ github.event.number }}"
+          echo "PR Action: ${{ github.event.action }}"
+          echo "Base Branch: ${{ github.base_ref }}"
+          echo "Head Branch: ${{ github.head_ref }}"
+
       - name: Collect PR changelog and post comment
-        run: pnpm release pr-changelog fetch --pr-number ${{ github.event.number }} --save --skip-if-exists --post-comment
+        run: |
+          echo "::group::PR Changelog Collection"
+          pnpm release pr-changelog fetch --pr-number ${{ github.event.number }} --save --post-comment
+          echo "::endgroup::"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
