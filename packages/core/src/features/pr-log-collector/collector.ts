@@ -106,7 +106,18 @@ async function saveSnapshot(
   // 2. 保存 Markdown 快照到 releases/ 目录
   const releasesDir = resolve(base, '.release-toolkit', 'releases');
   mkdirSync(releasesDir, { recursive: true });
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const now = new Date();
+  const timestamp = [
+    String(now.getFullYear()).slice(-2),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+    '-',
+    String(now.getHours()).padStart(2, '0'),
+    '-',
+    String(now.getMinutes()).padStart(2, '0'),
+    '-',
+    String(now.getSeconds()).padStart(2, '0'),
+  ].join('');
   const mdPath = resolve(releasesDir, `pr${prNumber}-${timestamp}.md`);
   const mdContent = [
     `# PR #${prNumber} 变更日志`,

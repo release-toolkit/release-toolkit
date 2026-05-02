@@ -17,7 +17,7 @@ CI 驱动的 **Monorepo 发布工具链** —— 自动收集 PR 变更日志、
 - 自动提取当前 PR 的 **标题（header）** 作为变更摘要
 - 自动读取当前 PR 的 **首个评论中的指定区域**（通过 `<!-- RELEASE-LOG-START -->` / `<!-- RELEASE-LOG-END -->` 标记）作为详细说明
 - 将上述内容格式化后，**幂等更新回当前 PR 的描述体（body）**（使用 `<!-- RELEASE-TOOLKIT-OUTPUT-START -->` / `<!-- RELEASE-TOOLKIT-OUTPUT-END -->` 标记区，每次 PR 变更都自动同步）
-- 同时**保存快照**到 `.release-toolkit/releases/pr{prNumber}-{时间戳}.md`，供后续 `releasePreview` 聚合使用
+- 同时**保存快照**到 `.release-toolkit/releases/pr{prNumber}-{YY-MM-DD-hh-mm-ss}.md`（如 `pr123-26-05-02-04-53-00.md`），供后续 `releasePreview` 聚合使用
 
 > 作用：让每个 PR 在合并前都沉淀一份结构化的变更记录，作为后续发布日志的数据源。
 
