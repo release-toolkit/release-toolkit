@@ -62,7 +62,7 @@ export async function collectPRLog(
 
     let savedPath: string | undefined;
     if (options.save) {
-      savedPath = await saveSnapshot(meta.number, meta.title, releaseLog, options.cwd);
+      savedPath = await saveSnapshot(meta.number, meta.title, releaseLog, commentBody, options.cwd);
     }
 
     return {
@@ -89,19 +89,42 @@ async function saveSnapshot(
   prNumber: number,
   title: string,
   releaseLog: string | null,
+  formattedComment: string,
   cwd?: string,
 ): Promise<string> {
   const base = cwd || process.cwd();
-  const snapshotDir = resolve(base, '.release-toolkit', 'changelog', 'prs');
-  mkdirSync(snapshotDir, { recursive: true });
 
-  const snapshotPath = resolve(snapshotDir, `pr-${prNumber}.json`);
+  // 1. 保存 JSON 元数据（向后兼容）
+  const jsonDir = resolve(base, '.release-toolkit', 'changelog', 'prs');
+  mkdirSync(jsonDir, { recursive: true });
+  const jsonPath = resolve(jsonDir, `pr-${prNumber}.json`);
   writeFileSync(
-    snapshotPath,
+    jsonPath,
     JSON.stringify({ prNumber, title, releaseLog, savedAt: new Date().toISOString() }, null, 2),
   );
 
-  return snapshotPath;
+  // 2. 保存 Markdown 快照到 releases/ 目录
+  const releasesDir = resolve(base, '.release-toolkit', 'releases');
+  mkdirSync(releasesDir, { recursive: true });
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const mdPath = resolve(releasesDir, `pr${prNumber}-${timestamp}.md`);
+  const mdContent = [
+    `# PR #${prNumber} 变更日志`,
+    ``,
+    `> 生成时间：${new Date().toISOString()}`,
+    ``,
+    `## PR 标题`,
+    ``,
+    title,
+    ``,
+    `## 详细说明`,
+    ``,
+    releaseLog || '（无 RELEASE-LOG 标记区内容）',
+    ``,
+  ].join('\n');
+  writeFileSync(mdPath, mdContent);
+
+  return mdPath;
 }
 
 function updatePRBody(currentBody: string | null, newContent: string): string {
