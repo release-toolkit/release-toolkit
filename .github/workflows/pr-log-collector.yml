@@ -1,9 +1,9 @@
 name: prLogCollector — PR 日志收集
 
 on:
-  pull_request:
+  pull_request_review:
     branches: [dev]
-    types: [opened, synchronize, reopened]
+    types: [submitted]
 
 permissions:
   pull-requests: write
@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   collect:
+    if: github.event.review.state == 'approved'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -29,6 +30,6 @@ jobs:
         run: pnpm build
 
       - name: Collect PR changelog
-        run: pnpm release collect --pr-number ${{ github.event.number }} --owner ${{ github.repository_owner }} --repo ${{ github.event.repository.name }}
+        run: pnpm release collect --pr-number ${{ github.event.pull_request.number }} --owner ${{ github.repository_owner }} --repo ${{ github.event.repository.name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
