@@ -1,5 +1,5 @@
 import type { PRChangelogData } from '../types.js';
-import { loadPRChangelogConfig } from '../../../config/index.js';
+import { loadPRChangelogConfig, DEFAULT_PR_CONFIG } from '../../../config/index.js';
 import type { PRChangelogConfig } from '../../../config/index.js';
 import { getPR, getCommits, getFirstReviewComment, getAllFiles } from './github-api.js';
 import { resolvePackages } from './package-resolver.js';
@@ -24,7 +24,10 @@ export async function fetchPRData(options: PRFetcherOptions): Promise<PRChangelo
   const octokit = new Octokit({ auth: options.token });
 
   // Load PR changelog config (use provided override or load from file)
-  const prConfig = options.prConfig ?? loadPRChangelogConfig();
+  const prConfig = {
+    ...DEFAULT_PR_CONFIG,
+    ...(options.prConfig ?? loadPRChangelogConfig()),
+  } as Required<PRChangelogConfig>;
 
   const [pr, commits, comments, files] = await Promise.all([
     getPR(octokit, options),

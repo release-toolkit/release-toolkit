@@ -92,9 +92,10 @@ export class Stage2ReleasePreparer {
       const snapshots = this.consumeSnapshots();
       console.log(`[Stage2] Loaded ${snapshots.length} PR snapshot(s)\n`);
 
-      // Step4: Build unified release changelog
+      // Step 4: Build unified release changelog
       console.log('[Stage2] Step 3: Building release changelog...');
-      const markdown = await this.buildChangelog(snapshots);
+      const version = this.extractVersion(versionDiffs);
+      const markdown = await this.buildChangelog(snapshots, version);
 
       console.log(`[Stage2] Release preparation completed\n`);
       console.log('='.repeat(50));
@@ -168,7 +169,7 @@ export class Stage2ReleasePreparer {
   /**
    * Step 3: Build unified release changelog
    */
-  private async buildChangelog(snapshots: ConsumedSnapshot[]): Promise<string> {
+  private async buildChangelog(snapshots: ConsumedSnapshot[], version: string): Promise<string> {
     // 3a. Collect structured entries
     const rawEntries = collectEntriesFromSnapshots(snapshots);
 
@@ -180,7 +181,6 @@ export class Stage2ReleasePreparer {
     console.log(`[Stage2] Loaded plugins: [${pluginManager.getRegisteredNames().join(', ')}]`);
 
     const pipeline = new Pipeline(pluginManager);
-    const version = this.extractVersion(snapshots);
     const output = await pipeline.run(rawEntries, version);
 
     // 3c. Render to Markdown

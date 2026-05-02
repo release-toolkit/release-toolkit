@@ -18,7 +18,7 @@ const DEFAULT_CONFIG: Required<Omit<CiRunnerOptions, 'afterRelease'>> & { afterR
 };
 
 /** Default PR changelog config */
-const DEFAULT_PR_CONFIG: Required<PRChangelogConfig> = {
+export const DEFAULT_PR_CONFIG: Required<PRChangelogConfig> = {
   packagesDir: 'packages',
   rootTag: 'root',
   packageMap: {},

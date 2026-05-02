@@ -1,9 +1,8 @@
 import { Command } from 'commander';
 import {
   Stage1PRCollector,
-  type Stage1Options,
+  listPRChangeLogs,
 } from '@release-toolkit/core';
-import type { SavePRChangelogOptions } from '@release-toolkit/core';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 

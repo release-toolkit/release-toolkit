@@ -67,6 +67,8 @@ export interface IPlugin {
 export interface ILineFormatter extends IPlugin {
   /** Formatter type identifier for runtime discrimination */
   __formatterType?: 'line';
+  /** Optional: runtime detection discriminator */
+  formatLine?: (entry: ChangeLogEntry) => ChangeLogEntry | null;
   format(entry: ChangeLogEntry): ChangeLogEntry | null;
 }
 
