@@ -7,14 +7,18 @@ on:
 
 permissions:
   pull-requests: write
-  contents: read
+  contents: write
 
 jobs:
   collect:
     if: github.event.review.state == 'approved'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout PR branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: pnpm/action-setup@v5
 
@@ -41,5 +45,7 @@ jobs:
           git add .
           git diff --staged --quiet || {
             git commit -m "[bot] 自动更新 PR 描述体"
-            git push
+            git push origin ${{ github.event.pull_request.head.ref }}
           }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
