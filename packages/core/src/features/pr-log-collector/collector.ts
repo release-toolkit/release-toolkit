@@ -3,11 +3,14 @@ import { resolve } from 'node:path';
 
 import { loadConfig, type ReleaseToolkitConfig } from '../../shared/config/index.js';
 import type { GithubContext } from '../../shared/types.js';
-import { getPR } from '../../shared/github/api-client.js';
+import { getPR, updatePR } from '../../shared/github/api-client.js';
 import { postOrUpdateComment } from '../../shared/github/pr-commenter.js';
 import { extractReleaseLog } from './release-log-extractor.js';
 import { formatPRLogComment } from './formatter.js';
 import type { PRLogCollectorOptions, PRLogCollectorResult, PRMeta } from './types.js';
+
+const OUTPUT_START = '<!-- RELEASE-TOOLKIT-OUTPUT-START -->';
+const OUTPUT_END = '<!-- RELEASE-TOOLKIT-OUTPUT-END -->';
 
 async function fetchPRMeta(context: GithubContext, _config: ReleaseToolkitConfig): Promise<PRMeta> {
   const { data } = await getPR(context);
@@ -40,9 +43,14 @@ export async function collectPRLog(
 
     const commentBody = formatPRLogComment(meta.title, releaseLog);
 
+    // 更新 PR 描述体（幂等）
+    const updatedBody = updatePRBody(meta.body, commentBody);
+    await updatePR(context, updatedBody);
+
+    // 可选：同时更新评论区（用于通知）
     await postOrUpdateComment(context, commentBody, {
-      markerStart: config.prLogCollector?.releaseLogMarker?.start,
-      markerEnd: config.prLogCollector?.releaseLogMarker?.end,
+      markerStart: OUTPUT_START,
+      markerEnd: OUTPUT_END,
     });
 
     let savedPath: string | undefined;
@@ -87,4 +95,24 @@ async function saveSnapshot(
   );
 
   return snapshotPath;
+}
+
+function updatePRBody(currentBody: string | null, newContent: string): string {
+  const body = currentBody ?? '';
+  const wrappedContent = `${OUTPUT_START}\n${newContent}\n${OUTPUT_END}`;
+
+  if (body.includes(OUTPUT_START) && body.includes(OUTPUT_END)) {
+    // 幂等更新：替换现有标记区内容
+    return body.replace(
+      new RegExp(`${escapeRegex(OUTPUT_START)}[\\s\\S]*?${escapeRegex(OUTPUT_END)}`, 'g'),
+      wrappedContent,
+    );
+  }
+
+  // 首次运行：追加到描述体末尾
+  return `${body}\n\n${wrappedContent}`;
+}
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

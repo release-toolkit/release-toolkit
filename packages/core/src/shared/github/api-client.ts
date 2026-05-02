@@ -76,3 +76,18 @@ export async function updatePRComment(
     body,
   });
 }
+
+export async function updatePR(
+  context: GithubContext,
+  body: string,
+): Promise<void> {
+  const octokit = await getOctokit();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const octokitAny = octokit as any;
+  await octokitAny.rest.pulls.update({
+    owner: context.repoOwner!,
+    repo: context.repoName!,
+    pull_number: context.prNumber!,
+    body,
+  });
+}
