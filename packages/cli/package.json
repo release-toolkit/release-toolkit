@@ -16,7 +16,6 @@
     "README.md"
   ],
   "dependencies": {
-    "@release-toolkit/changelog-presets": "workspace:*",
     "@release-toolkit/core": "workspace:*",
     "commander": "^14.0.3"
   },

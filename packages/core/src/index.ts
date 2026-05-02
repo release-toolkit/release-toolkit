@@ -1,95 +1,61 @@
-// Types
+// Shared: types
 export type {
   DiffType,
   PackageVersionInfo,
   VersionDiffResult,
-  CommitType,
-  ChangeLogEntry,
-  ChangeLogOutput,
-  IPlugin,
-  ILineFormatter,
-  ILogFormatter,
   GithubContext,
-  CiRunnerOptions,
-  FileWriteMode,
-  FileOutputterOptions,
-} from './types.js';
+} from './shared/types.js';
 
-// Constants
+// Shared: config
 export {
-  DEFAULT_BASE_REF,
-  DEFAULT_CHANGELOG_DIR,
-  COMMENT_ANCHOR_START,
-  COMMENT_ANCHOR_END,
-  DEFAULT_PLUGINS,
-  DIFF_TYPE_LABELS,
-} from './constants.js';
+  loadConfig,
+  CONFIG_DIR,
+  CONFIG_FILE,
+  DEFAULT_CONFIG,
+} from './shared/config/index.js';
+export type { ReleaseToolkitConfig } from './shared/config/index.js';
 
-// Git
-export { GitReader } from './git/git-reader.js';
-
-// Version
-export { PackageScanner } from './version/version-diff-detector.js';
-
-// Changelog (release-level and PR-level)
+// Shared: github
 export {
-  ChangelogCollector,
-  ChangelogRenderer,
-  type RendererOptions,
-  saveReleaseSummary,
-  listReleaseSummaries,
-  renderPRChangelogMD,
-  savePRChangelog,
-  listPRChangeLogs,
-  PR_CHANGELOG_DIR,
-  RELEASE_LOG_START,
-  RELEASE_LOG_END,
-  PACKAGES_MARKER,
-  extractReleaseLog,
-  extractDeclaredPackages,
-  type SavePRChangelogOptions,
-  fetchPRData,
-  type PRChangelogData,
-  type PRMeta,
-  type CommitTitle,
-  type PRReviewNote,
-  type PRRelatedInfo,
-  type PRFetcherOptions,
-  consumeAllSnapshots,
-  collectEntriesFromSnapshots,
-  type ConsumedSnapshot,
-} from './changelog/index.js';
+  getOctokit,
+  getPR,
+  getPRComments,
+  createPRComment,
+  updatePRComment,
+} from './shared/github/api-client.js';
+export { postOrUpdateComment } from './shared/github/pr-commenter.js';
+export type { PRCommenterOptions } from './shared/github/pr-commenter.js';
+export { detectGithubContext } from './shared/github/context-detector.js';
 
-// Config
-export { loadConfig, loadPRChangelogConfig, initConfig, CONFIG_DIR, CONFIG_FILE } from './config/index.js';
-export type { ReleaseToolkitConfig, PRChangelogConfig } from './config/index.js';
+// Shared: git
+export {
+  diffFiles,
+  showFileContent,
+  getCurrentSha,
+  createTag,
+  pushTags,
+} from './shared/git/git-reader.js';
 
-// Plugin
-export { PluginManager } from './plugin/plugin-manager.js';
-export { Pipeline } from './plugin/pipeline.js';
-
-// Output (CI layer)
-export { GithubContextDetector } from './output/github-context-detector.js';
-export { PRCommentPoster } from './output/pr-comment-poster.js';
-export { FileOutputter } from './output/file-outputter.js';
-
-// CI Runner (Deprecated: Use Stage classes instead)
-export { CiRunner } from './ci/ci-runner.js';
-export type { CiRunResult } from './ci/ci-runner.js';
-
-// Stages (New Architecture)
-export { Stage1PRCollector, type Stage1Options, type Stage1Result } from './stages/stage1-pr-collector.js';
-export { Stage2ReleasePreparer, type Stage2Options, type Stage2Result } from './stages/stage2-release-preparer.js';
-export { Stage3ReleasePublisher, type Stage3Options, type Stage3Result } from './stages/stage3-release-publisher.js';
-
-// Tag
-export { TagManager } from './tag/tag-manager.js';
-export type { TagResult, TagManagerOptions } from './tag/tag-manager.js';
-
-// Publish
-export { GithubReleaseCreator } from './publish/github-release-creator.js';
+// Features: prLogCollector
+export { collectPRLog } from './features/pr-log-collector/index.js';
 export type {
+  PRLogCollectorOptions,
+  PRLogCollectorResult,
+  PRMeta,
+} from './features/pr-log-collector/types.js';
+
+// Features: releasePreview
+export { previewRelease } from './features/release-preview/index.js';
+export type {
+  ReleasePreviewOptions,
+  ReleasePreviewResult,
+  PackageVersionDiff,
+} from './features/release-preview/types.js';
+
+// Features: releasePublisher
+export { publishRelease } from './features/release-publisher/index.js';
+export type {
+  ReleasePublisherOptions,
+  ReleasePublisherResult,
   ReleaseHookContext,
-  GithubReleaseOptions,
-  GithubReleaseResult,
-} from './publish/github-release-creator.js';
+} from './features/release-publisher/types.js';

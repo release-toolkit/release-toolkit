@@ -1,0 +1,18 @@
+{
+  "devBranch": "dev",
+  "productionBranch": "main",
+  "prLogCollector": {
+    "releaseLogMarker": {
+      "start": "<!-- RELEASE-LOG-START -->",
+      "end": "<!-- RELEASE-LOG-END -->"
+    }
+  },
+  "releasePreview": {
+    "workspaceFile": "pnpm-workspace.yaml",
+    "noChangeMessage": "⚠️ 本次 PR 未检测到任何包的版本变更，合并后将不会触发发布。"
+  },
+  "releasePublisher": {
+    "createGithubRelease": true,
+    "afterRelease": []
+  }
+}

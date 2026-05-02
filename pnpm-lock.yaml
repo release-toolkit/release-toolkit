@@ -39,17 +39,8 @@ importers:
         specifier: ^4.1.5
         version: 4.1.5(@types/node@25.6.0)(vite@8.0.10(@types/node@25.6.0))
 
-  packages/changelog-presets:
-    dependencies:
-      '@release-toolkit/core':
-        specifier: workspace:*
-        version: link:../core
-
   packages/cli:
     dependencies:
-      '@release-toolkit/changelog-presets':
-        specifier: workspace:*
-        version: link:../changelog-presets
       '@release-toolkit/core':
         specifier: workspace:*
         version: link:../core
@@ -63,6 +54,9 @@ importers:
 
   packages/core:
     dependencies:
+      js-yaml:
+        specifier: ^4.1.0
+        version: 4.1.1
       semver:
         specifier: ^7.6.0
         version: 7.7.4
@@ -73,6 +67,16 @@ importers:
       octokit:
         specifier: ^4.0.0
         version: 4.1.4
+    devDependencies:
+      '@types/js-yaml':
+        specifier: ^4.0.0
+        version: 4.0.9
+      '@types/node':
+        specifier: ^25.6.0
+        version: 25.6.0
+      '@types/semver':
+        specifier: ^7.7.1
+        version: 7.7.1
 
 packages:
 
@@ -418,6 +422,9 @@ packages:
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
 
+  '@types/js-yaml@4.0.9':
+    resolution: {integrity: sha512-k4MGaQl5TGo/iipqb2UDG2UwjXziSWkh0uysQelTlJpX1qGlpUZYm8PnO4DxG1qBomtJUdYJ6qR6xdIah10JLg==}
+
   '@types/jsesc@2.5.1':
     resolution: {integrity: sha512-9VN+6yxLOPLOav+7PwjZbxiID2bVaeq0ED4qSQmdQTdjnXJSaCVKTR58t15oqH1H5t8Ng2ZX1SabJVoN9Q34bw==}
 
@@ -426,6 +433,9 @@ packages:
 
   '@types/node@25.6.0':
     resolution: {integrity: sha512-+qIYRKdNYJwY3vRCZMdJbPLJAtGjQBudzZzdzwQYkEPQd+PJGixUL5QfvCLDaULoLv+RhT3LDkwEfKaAkgSmNQ==}
+
+  '@types/semver@7.7.1':
+    resolution: {integrity: sha512-FmgJfu+MOcQ370SD0ev7EI8TlCAfKYU+B4m5T3yXc1CiRN94g/SZPtsCkk506aUDtlMnFZvasDwHHUcZUEaYuA==}
 
   '@typescript-eslint/eslint-plugin@8.59.1':
     resolution: {integrity: sha512-BOziFIfE+6osHO9FoJG4zjoHUcvI7fTNBSpdAwrNH0/TLvzjsk2oo8XSSOT2HhqUyhZPfHv4UOffoJ9oEEQ7Ag==}
@@ -1639,6 +1649,8 @@ snapshots:
 
   '@types/estree@1.0.8': {}
 
+  '@types/js-yaml@4.0.9': {}
+
   '@types/jsesc@2.5.1': {}
 
   '@types/json-schema@7.0.15': {}
@@ -1646,6 +1658,8 @@ snapshots:
   '@types/node@25.6.0':
     dependencies:
       undici-types: 7.19.2
+
+  '@types/semver@7.7.1': {}
 
   '@typescript-eslint/eslint-plugin@8.59.1(@typescript-eslint/parser@8.59.1(eslint@9.39.4)(typescript@6.0.3))(eslint@9.39.4)(typescript@6.0.3)':
     dependencies:
