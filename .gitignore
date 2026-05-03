@@ -7,5 +7,4 @@ dist/
 .env.local
 .codebuddy/
 
-# Auto-generated release history (config.json should be committed)
-.releasetoolkit/changelog/
+*.pem

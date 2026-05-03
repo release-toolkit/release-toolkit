@@ -1,0 +1,30 @@
+name: Collect PR Log
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number'
+        required: true
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install
+        run: pnpm install
+
+      - name: Collect PR Log
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pnpm release-toolkit collect \
+            --pr-number ${{ inputs.pr_number }} \
+            --owner ${{ github.repository_owner }} \
+            --repo ${{ github.repository }}

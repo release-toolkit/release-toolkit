@@ -1,0 +1,13 @@
+name = "release-toolkit-app"
+type = "javascript"
+main = "src/index.ts"
+
+compatibility_date = "2024-01-01"
+
+[ vars]
+GITHUB_APP_ID = "3589117"
+GITHUB_WEBHOOK_SECRET = "rss1102-release-toolkit-webhook-2026"
+
+# Private key 通过以下命令设置：
+# cd packages/app-server
+# cat release-toolkit.2026-05-03.private-key.pem | npx wrangler secret put GITHUB_APP_PRIVATE_KEY

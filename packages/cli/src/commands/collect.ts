@@ -7,7 +7,7 @@ export const collectCommand = new Command('collect')
   .requiredOption('--owner <owner>', '仓库所有者')
   .requiredOption('--repo <repo>', '仓库名称')
   .option('--token <token>', 'GitHub Token', process.env.GITHUB_TOKEN)
-  .option('--save', '保存快照到本地', false)
+  .option('--save', '保存快照到本地', true)
   .option('--cwd <path>', '工作目录', process.cwd())
   .action(async (options) => {
     const result = await collectPRLog({
