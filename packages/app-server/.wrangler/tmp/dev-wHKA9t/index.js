@@ -105,7 +105,12 @@ async function handleEvent(eventType, event, env) {
     if (!pr || !event.installation) {
       return { success: false, message: "Missing PR or installation data" };
     }
-    const supported = ["opened", "synchronize", "edited", "ready_for_review"];
+    if (event.action === "opened") {
+      const token2 = await getInstallationToken(event.installation.id, env);
+      await commentOnPR(token2, pr.number, pr.base.repo.owner.login, pr.base.repo.name);
+      return { success: true, message: `PR #${pr.number} - reminded user to approve` };
+    }
+    const supported = ["synchronize", "edited", "ready_for_review"];
     if (!supported.includes(event.action ?? "")) {
       return { success: true, message: `Skipped action: ${event.action}` };
     }
@@ -140,6 +145,37 @@ async function handleEvent(eventType, event, env) {
   return { success: true, message: `Unhandled event: ${eventType}` };
 }
 __name(handleEvent, "handleEvent");
+async function commentOnPR(token, prNumber, owner, repo) {
+  const commentBody = [
+    "\u{1F44B} \u611F\u8C22\u521B\u5EFA PR\uFF01",
+    "",
+    "\u26A0\uFE0F **\u63D0\u9192\uFF1A** \u672C\u4ED3\u5E93\u5DF2\u5B89\u88C5 `release-toolkit` App\uFF0C",
+    "\u53EA\u6709\u5F53 PR **\u88AB\u6279\u51C6\uFF08approved\uFF09\u540E**\uFF0C\u624D\u4F1A\u81EA\u52A8\uFF1A",
+    "1. \u6536\u96C6\u53D8\u66F4\u65E5\u5FD7",
+    "2. \u66F4\u65B0 PR \u63CF\u8FF0\u4F53",
+    "3. \u4FDD\u5B58\u53D8\u66F4\u5FEB\u7167",
+    "",
+    "\u27A1\uFE0F **\u4E0B\u4E00\u6B65\uFF1A** \u8BF7\u627E Maintainer \u6279\u51C6\u6B64 PR \u5373\u53EF\u81EA\u52A8\u751F\u6210\uFF01"
+  ].join("\n");
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-API-Version": "2022-11-28",
+        "User-Agent": "release-toolkit-app"
+      },
+      body: JSON.stringify({ body: commentBody })
+    }
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Failed to comment: ${response.status} ${text}`);
+  }
+}
+__name(commentOnPR, "commentOnPR");
 async function triggerWorkflow(token, owner, repo, workflow, inputs) {
   const response = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflow}/dispatches`,

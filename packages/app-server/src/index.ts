@@ -104,22 +104,27 @@ async function handleEvent(
   event: WebhookEvent,
   env: Env,
 ): Promise<Record<string, unknown>> {
-  // pull_request 事件：触发 prLogCollector
+  // pull_request 事件
   if (eventType === 'pull_request') {
     const pr = event.pull_request;
     if (!pr || !event.installation) {
       return { success: false, message: 'Missing PR or installation data' };
     }
 
-    const supported = ['opened', 'synchronize', 'edited', 'ready_for_review'];
+    // 第一次创建 PR：评论提醒批准后才自动生成
+    if (event.action === 'opened') {
+      const token = await getInstallationToken(event.installation.id, env);
+      await commentOnPR(token, pr.number, pr.base.repo.owner.login, pr.base.repo.name);
+      return { success: true, message: `PR #${pr.number} - reminded user to approve` };
+    }
+
+    // PR 更新（synchronize/edited/ready_for_review）：触发 collect
+    const supported = ['synchronize', 'edited', 'ready_for_review'];
     if (!supported.includes(event.action ?? '')) {
       return { success: true, message: `Skipped action: ${event.action}` };
     }
 
-    // 获取 installation token
     const token = await getInstallationToken(event.installation.id, env);
-
-    // 触发 collect workflow
     await triggerWorkflow(
       token,
       pr.base.repo.owner.login,
@@ -157,6 +162,45 @@ async function handleEvent(
   }
 
   return { success: true, message: `Unhandled event: ${eventType}` };
+}
+
+/** 在 PR 创建时评论提醒用户批准 */
+async function commentOnPR(
+  token: string,
+  prNumber: number,
+  owner: string,
+  repo: string,
+): Promise<void> {
+  const commentBody = [
+    '👋 感谢创建 PR！',
+    '',
+    '⚠️ **提醒：** 本仓库已安装 `release-toolkit` App，',
+    '只有当 PR **被批准（approved）后**，才会自动：',
+    '1. 收集变更日志',
+    '2. 更新 PR 描述体',
+    '3. 保存变更快照',
+    '',
+    '➡️ **下一步：** 请找 Maintainer 批准此 PR 即可自动生成！',
+  ].join('\n');
+
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-API-Version': '2022-11-28',
+        'User-Agent': 'release-toolkit-app',
+      },
+      body: JSON.stringify({ body: commentBody }),
+    },
+  );
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Failed to comment: ${response.status} ${text}`);
+  }
 }
 
 /** 触发 GitHub Actions workflow */
