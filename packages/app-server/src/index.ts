@@ -171,17 +171,15 @@ async function commentOnPR(
   owner: string,
   repo: string,
 ): Promise<void> {
-  const commentBody = [
-    '👋 感谢创建 PR！',
-    '',
-    '⚠️ **提醒：** 本仓库已安装 `release-toolkit` App，',
-    '只有当 PR **被批准（approved）后**，才会自动：',
-    '1. 收集变更日志',
-    '2. 更新 PR 描述体',
-    '3. 保存变更快照',
-    '',
-    '➡️ **下一步：** 请找 Maintainer 批准此 PR 即可自动生成！',
-  ].join('\n');
+  const commentBody = `👋 感谢创建 PR！
+
+⚠️ **提醒：** 本仓库已安装 \`release-toolkit\` App，
+只有当 PR **被批准（approved）后**，才会自动：
+1. 收集变更日志
+2. 更新 PR 描述体
+3. 保存变更快照
+
+➡️ **下一步：** 请找 Maintainer 批准此 PR 即可自动生成！`;
 
   const response = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments`,
