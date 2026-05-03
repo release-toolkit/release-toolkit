@@ -1,0 +1,32 @@
+name: Deploy App Server
+
+on:
+  push:
+    paths:
+      - "packages/app-server/**"
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        working-directory: packages/app-server
+        run: |
+          pnpm install --no-frozen-lockfile
+
+      - name: Deploy to Cloudflare Workers
+        working-directory: packages/app-server
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          pnpm run deploy
