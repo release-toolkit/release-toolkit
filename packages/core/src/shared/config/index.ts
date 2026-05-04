@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 export interface ReleaseToolkitConfig {
+  [key: string]: unknown;
   devBranch?: string;
   productionBranch?: string;
   prLogCollector?: {

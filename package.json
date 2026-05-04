@@ -7,6 +7,7 @@
     "build": "pnpm -r build",
     "dev": "pnpm -r dev",
     "test": "pnpm -r test",
+    "type-check": "pnpm -r type-check",
     "lint": "eslint .",
     "format": "prettier --write \"packages/*/src/**/*.ts\"",
     "release": "node packages/cli/dist/index.mjs"
