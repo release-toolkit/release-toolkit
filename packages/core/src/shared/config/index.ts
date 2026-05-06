@@ -5,6 +5,7 @@ export interface ReleaseToolkitConfig {
   [key: string]: unknown;
   devBranch?: string;
   productionBranch?: string;
+  plugins?: string[];
   prLogCollector?: {
     releaseLogMarker?: {
       start?: string;

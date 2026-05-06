@@ -24,7 +24,8 @@
   "dependencies": {
     "semver": "^7.6.0",
     "simple-git": "^3.25.0",
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "@release-toolkit/changelog-presets": "workspace:*"
   },
   "optionalDependencies": {
     "octokit": "^4.0.0"

@@ -7,6 +7,7 @@ import type { ReleaseToolkitConfig } from '../../shared/config/index.js';
 import { getPR, updatePR } from '../../shared/github/api-client.js';
 import { extractReleaseLog, type PackageChangeLog } from './release-log-extractor.js';
 import type { PRLogCollectorOptions, PRLogCollectorResult, PRMeta } from './types.js';
+import { loadPlugins, applyFormatters, parseChangelog } from '../../shared/plugins/index.js';
 
 const OUTPUT_START = '<!-- RELEASE-TOOLKIT-OUTPUT-START -->';
 const OUTPUT_END = '<!-- RELEASE-TOOLKIT-OUTPUT-END -->';
@@ -143,6 +144,8 @@ async function generateStructuredMarkdown(
 ): Promise<string> {
   const base = cwd || process.cwd();
   const changedPackages = await detectChangedPackages(baseRef, headRef, base);
+  const config = loadConfig(cwd);
+  const { formatters } = await loadPlugins(config.plugins);
 
   const lines: string[] = [];
 
@@ -193,7 +196,11 @@ async function generateStructuredMarkdown(
     lines.push('');
     lines.push('### 变更日志');
     lines.push('');
-    lines.push(packageLogMap.get(pkg) || '（无对应的变更日志）');
+    
+    const changeLog = packageLogMap.get(pkg) || '（无对应的变更日志）';
+    // 应用格式化器
+    const formattedLog = applyFormatters(parseChangelog(changeLog), formatters);
+    lines.push(formattedLog);
     lines.push('');
   }
 

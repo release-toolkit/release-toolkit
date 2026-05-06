@@ -52,6 +52,8 @@ importers:
         specifier: ^3.0.0
         version: 3.114.17(@cloudflare/workers-types@4.20260503.1)
 
+  packages/changelog-presets: {}
+
   packages/cli:
     dependencies:
       '@release-toolkit/core':
@@ -67,6 +69,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@release-toolkit/changelog-presets':
+        specifier: workspace:*
+        version: link:../changelog-presets
       js-yaml:
         specifier: ^4.1.0
         version: 4.1.1
