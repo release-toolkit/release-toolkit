@@ -129,7 +129,7 @@ async function handleEvent(
       token,
       pr.base.repo.owner.login,
       pr.base.repo.name,
-      'collect.yml',
+      'pr-log-collector.yml',
       { pr_number: pr.number },
     );
 
@@ -154,7 +154,7 @@ async function handleEvent(
       token,
       repo.owner.login,
       repo.name,
-      'preview.yml',
+      'release-preview.yml',
       {},
     );
 
