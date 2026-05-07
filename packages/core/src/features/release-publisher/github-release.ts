@@ -5,13 +5,11 @@ export async function createGithubRelease(
   context: ReleaseHookContext,
   repoOwner: string,
   repoName: string,
-  _token?: string,
+  token?: string,
 ): Promise<string | null> {
   try {
-    const octokit = await getOctokit();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const octokitAny = octokit as any;
-    const { data } = await octokitAny.rest.repos.createRelease({
+    const octokit = await getOctokit(token);
+    const { data } = await octokit.rest.repos.createRelease({
       owner: repoOwner,
       repo: repoName,
       tag_name: context.tagName,

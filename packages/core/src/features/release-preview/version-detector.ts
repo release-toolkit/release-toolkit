@@ -48,7 +48,7 @@ export async function detectVersionChanges(
   return diffs;
 }
 
-function resolvePackageDirs(patterns: string[], basePath: string): string[] {
+export function resolvePackageDirs(patterns: string[], basePath: string): string[] {
   const dirs: string[] = [];
   for (const pattern of patterns) {
     if (pattern.endsWith('/*')) {
@@ -61,9 +61,13 @@ function resolvePackageDirs(patterns: string[], basePath: string): string[] {
   return dirs;
 }
 
-function compareVersions(v1: string, v2: string): 'major' | 'minor' | 'patch' | null {
-  const p1 = v1.split('.').map(Number);
-  const p2 = v2.split('.').map(Number);
+export function compareVersions(v1: string, v2: string): 'major' | 'minor' | 'patch' | null {
+  // 去除预发布版本后缀（如 1.0.1-alpha.1 → 1.0.1）
+  const v1Normalized = v1.split('-')[0] || v1;
+  const v2Normalized = v2.split('-')[0] || v2;
+
+  const p1 = v1Normalized.split('.').map(Number);
+  const p2 = v2Normalized.split('.').map(Number);
 
   if (p2[0] > p1[0]) return 'major';
   if (p2[1] > p1[1]) return 'minor';
