@@ -22,17 +22,18 @@
     "README.md"
   ],
   "dependencies": {
+    "js-yaml": "^4.1.0",
     "semver": "^7.6.0",
     "simple-git": "^3.25.0",
-    "js-yaml": "^4.1.0",
     "@release-toolkit/changelog-presets": "workspace:*"
   },
   "optionalDependencies": {
     "octokit": "^4.0.0"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.0",
     "@types/node": "^25.6.0",
     "@types/semver": "^7.7.1",
-    "@types/js-yaml": "^4.0.0"
+    "vite-tsconfig-paths": "^6.1.1"
   }
 }

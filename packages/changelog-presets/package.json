@@ -1,7 +1,7 @@
 {
   "name": "@release-toolkit/changelog-presets",
   "version": "0.0.0",
-  "description": "Preset formatters for changelog generation",
+  "description": "Changelog formatters and presets for release-toolkit",
   "type": "module",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
@@ -16,10 +16,11 @@
     "dev": "tsdown --config tsdown.config.ts --watch",
     "type-check": "tsc --noEmit"
   },
-  "files": [
-    "dist",
-    "README.md"
-  ],
-  "dependencies": {},
-  "devDependencies": {}
+  "files": ["dist", "README.md"],
+  "dependencies": {
+    "@release-toolkit/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0"
+  }
 }
