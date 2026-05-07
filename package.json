@@ -13,7 +13,7 @@
     "release": "node packages/cli/dist/index.mjs"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=24.0.0"
   },
   "packageManager": "pnpm@9.15.0",
   "keywords": [
