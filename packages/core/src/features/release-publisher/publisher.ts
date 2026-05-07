@@ -50,12 +50,16 @@ export async function publishRelease(
         };
 
         try {
+          // 优先使用 options 参数，环境变量作为 fallback
+          const owner = options.owner || process.env.GITHUB_REPOSITORY?.split('/')[0] || '';
+          const repo = options.repo || process.env.GITHUB_REPOSITORY?.split('/')[1] || '';
+          const token = options.token || process.env.GITHUB_TOKEN;
+
           const url = await createGithubRelease(
             hookContext,
-            // 这些需要从环境变量或配置中获取
-            process.env.GITHUB_REPOSITORY?.split('/')[0] || '',
-            process.env.GITHUB_REPOSITORY?.split('/')[1] || '',
-            process.env.GITHUB_TOKEN || '',
+            owner,
+            repo,
+            token,
           );
           releases.push({ packageName: diff.packageName, tagName, releaseUrl: url ?? undefined });
         } catch (err) {

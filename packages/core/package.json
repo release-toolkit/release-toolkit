@@ -14,7 +14,8 @@
   "scripts": {
     "build": "tsdown --config tsdown.config.ts",
     "dev": "tsdown --config tsdown.config.ts --watch",
-    "test": "vitest run"
+    "test": "vitest run",
+    "type-check": "tsc --noEmit"
   },
   "files": [
     "dist",
@@ -23,7 +24,8 @@
   "dependencies": {
     "js-yaml": "^4.1.0",
     "semver": "^7.6.0",
-    "simple-git": "^3.25.0"
+    "simple-git": "^3.25.0",
+    "@release-toolkit/changelog-presets": "workspace:*"
   },
   "optionalDependencies": {
     "octokit": "^4.0.0"

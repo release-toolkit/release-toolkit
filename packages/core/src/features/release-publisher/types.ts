@@ -8,6 +8,9 @@ export interface ReleaseHookContext {
 export interface ReleasePublisherOptions {
   cwd?: string;
   dryRun?: boolean;
+  owner?: string;
+  repo?: string;
+  token?: string;
 }
 
 export interface ReleasePublisherResult {

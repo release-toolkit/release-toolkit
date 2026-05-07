@@ -1,4 +1,5 @@
 import { readFileSync, existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { load } from 'js-yaml';
 
 export interface WorkspaceInfo {

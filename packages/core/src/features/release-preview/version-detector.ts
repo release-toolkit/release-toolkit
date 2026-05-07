@@ -1,4 +1,5 @@
 import { diffFiles, showFileContent } from '../../shared/git/git-reader.js';
+import { resolve } from 'node:path';
 import type { PackageVersionDiff } from './types.js';
 
 export async function detectVersionChanges(
@@ -8,9 +9,10 @@ export async function detectVersionChanges(
   _cwd?: string,
 ): Promise<PackageVersionDiff[]> {
   const diffs: PackageVersionDiff[] = [];
+  const basePath = _cwd || process.cwd();
 
   // 将 glob pattern 转换为实际目录列表
-  const packageDirs = resolvePackageDirs(workspacePatterns);
+  const packageDirs = resolvePackageDirs(workspacePatterns, basePath);
 
   for (const pkgDir of packageDirs) {
     const pkgJsonPath = `${pkgDir}/package.json`;
@@ -46,22 +48,26 @@ export async function detectVersionChanges(
   return diffs;
 }
 
-function resolvePackageDirs(patterns: string[]): string[] {
+export function resolvePackageDirs(patterns: string[], basePath: string): string[] {
   const dirs: string[] = [];
   for (const pattern of patterns) {
     if (pattern.endsWith('/*')) {
       const base = pattern.replace(/\*$/, '');
-      dirs.push(base); // 简化：直接使用 base 作为目录
+      dirs.push(resolve(basePath, base)); // 使用 resolve 解析路径
     } else {
-      dirs.push(pattern);
+      dirs.push(resolve(basePath, pattern));
     }
   }
   return dirs;
 }
 
-function compareVersions(v1: string, v2: string): 'major' | 'minor' | 'patch' | null {
-  const p1 = v1.split('.').map(Number);
-  const p2 = v2.split('.').map(Number);
+export function compareVersions(v1: string, v2: string): 'major' | 'minor' | 'patch' | null {
+  // 去除预发布版本后缀（如 1.0.1-alpha.1 → 1.0.1）
+  const v1Normalized = v1.split('-')[0] || v1;
+  const v2Normalized = v2.split('-')[0] || v2;
+
+  const p1 = v1Normalized.split('.').map(Number);
+  const p2 = v2Normalized.split('.').map(Number);
 
   if (p2[0] > p1[0]) return 'major';
   if (p2[1] > p1[1]) return 'minor';

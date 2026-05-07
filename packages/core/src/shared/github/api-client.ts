@@ -1,15 +1,16 @@
 import type { GithubContext } from '../types.js';
+import type { OctokitInstance, PullRequestData, IssueCommentData } from './types.js';
 
-let _octokit: unknown = null;
+let _octokit: OctokitInstance | null = null;
 
-export async function getOctokit(): Promise<unknown> {
+export async function getOctokit(token?: string): Promise<OctokitInstance> {
   if (_octokit) return _octokit;
 
   try {
     const { Octokit } = await import('octokit');
     _octokit = new Octokit({
-      auth: process.env.GITHUB_TOKEN || undefined,
-    });
+      auth: token || process.env.GITHUB_TOKEN || undefined,
+    }) as OctokitInstance;
     return _octokit;
   } catch {
     throw new Error(
@@ -20,11 +21,9 @@ export async function getOctokit(): Promise<unknown> {
 
 export async function getPR(
   context: GithubContext,
-): Promise<{ data: Record<string, unknown> }> {
+): Promise<{ data: PullRequestData }> {
   const octokit = await getOctokit();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const octokitAny = octokit as any;
-  const { data } = await octokitAny.rest.pulls.get({
+  const { data } = await octokit.rest.pulls.get({
     owner: context.repoOwner!,
     repo: context.repoName!,
     pull_number: context.prNumber!,
@@ -34,11 +33,9 @@ export async function getPR(
 
 export async function getPRComments(
   context: GithubContext,
-): Promise<{ data: Array<Record<string, unknown>> }> {
+): Promise<{ data: IssueCommentData[] }> {
   const octokit = await getOctokit();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const octokitAny = octokit as any;
-  const { data } = await octokitAny.rest.issues.listComments({
+  const { data } = await octokit.rest.issues.listComments({
     owner: context.repoOwner!,
     repo: context.repoName!,
     issue_number: context.prNumber!,
@@ -51,9 +48,7 @@ export async function createPRComment(
   body: string,
 ): Promise<void> {
   const octokit = await getOctokit();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const octokitAny = octokit as any;
-  await octokitAny.rest.issues.createComment({
+  await octokit.rest.issues.createComment({
     owner: context.repoOwner!,
     repo: context.repoName!,
     issue_number: context.prNumber!,
@@ -67,9 +62,7 @@ export async function updatePRComment(
   body: string,
 ): Promise<void> {
   const octokit = await getOctokit();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const octokitAny = octokit as any;
-  await octokitAny.rest.issues.updateComment({
+  await octokit.rest.issues.updateComment({
     owner: context.repoOwner!,
     repo: context.repoName!,
     comment_id: commentId,
@@ -82,9 +75,7 @@ export async function updatePR(
   body: string,
 ): Promise<void> {
   const octokit = await getOctokit();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const octokitAny = octokit as any;
-  await octokitAny.rest.pulls.update({
+  await octokit.rest.pulls.update({
     owner: context.repoOwner!,
     repo: context.repoName!,
     pull_number: context.prNumber!,

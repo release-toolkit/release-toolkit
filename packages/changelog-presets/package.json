@@ -13,12 +13,10 @@
   },
   "scripts": {
     "build": "tsdown --config tsdown.config.ts",
-    "dev": "tsdown --config tsdown.config.ts --watch"
+    "dev": "tsdown --config tsdown.config.ts --watch",
+    "type-check": "tsc --noEmit"
   },
-  "files": [
-    "dist",
-    "README.md"
-  ],
+  "files": ["dist", "README.md"],
   "dependencies": {
     "@release-toolkit/core": "workspace:*"
   },

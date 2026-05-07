@@ -4,6 +4,7 @@ import { scanWorkspace } from './workspace-scanner.js';
 import { detectVersionChanges } from './version-detector.js';
 import { aggregateLogs } from './log-aggregator.js';
 import { formatReleasePreviewComment } from './formatter.js';
+import { loadPlugins } from '../../shared/plugins/index.js';
 import type { ReleasePreviewOptions, ReleasePreviewResult } from './types.js';
 
 export async function previewRelease(
@@ -34,11 +35,15 @@ export async function previewRelease(
       config.releasePreview?.noChangeMessage ??
       '⚠️ 本次 PR 未检测到任何包的版本变更，合并后将不会触发发布。';
 
+    // 加载插件
+    const { formatters } = await loadPlugins(config.plugins);
+
     const commentBody = formatReleasePreviewComment(
       hasVersionChange,
       versionDiffs,
       aggregatedLog,
       noChangeMessage,
+      formatters,
     );
 
     await postOrUpdateComment(context, commentBody);
