@@ -131,6 +131,7 @@ async function handleEvent(
       pr.base.repo.name,
       'pr-log-collector.yml',
       { pr_number: pr.number },
+      pr.base.ref,
     );
 
     return {
@@ -156,6 +157,7 @@ async function handleEvent(
       repo.name,
       'release-preview.yml',
       {},
+      event.ref ?? 'main',
     );
 
     return { success: true, message: 'Push event - triggered preview workflow' };
@@ -208,6 +210,7 @@ async function triggerWorkflow(
   repo: string,
   workflow: string,
   inputs: Record<string, string | number>,
+  ref: string,
 ): Promise<void> {
   const response = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflow}/dispatches`,
@@ -220,7 +223,7 @@ async function triggerWorkflow(
         'User-Agent': 'release-toolkit-app',
       },
       body: JSON.stringify({
-        ref: 'main', // 或动态获取默认分支
+        ref,
         inputs,
       }),
     },

@@ -2,8 +2,7 @@ name: Deploy App Server
 
 on:
   push:
-    paths:
-      - "packages/app-server/**"
+    branches: [main, dev]
   workflow_dispatch:
 
 jobs:
