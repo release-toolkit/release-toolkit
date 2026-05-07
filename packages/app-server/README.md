@@ -43,8 +43,8 @@ GitHub Actions CI
 | 事件 | 动作 | 触发 Workflow |
 |---|---|---|
 | `pull_request` (opened) | 评论提醒批准 | - |
-| `pull_request` (synchronize/edited/ready_for_review) | 触发日志收集 | `collect.yml` |
-| `push` (to main) | 触发发布预览 | `preview.yml` |
+| `pull_request` (synchronize/edited/ready_for_review) | 触发日志收集 | `pr-log-collector.yml` |
+| `push` (to main) | 触发发布预览 | `release-preview.yml` |
 
 ---
 
@@ -136,7 +136,7 @@ https://release-toolkit-app.jimmymyss1102.workers.dev
 
 ## 触发的 Workflow 说明
 
-### `.github/workflows/collect.yml`
+### `.github/workflows/pr-log-collector.yml`
 
 由 `pull_request` 事件（`synchronize`/`edited`/`ready_for_review`）触发：
 
@@ -165,7 +165,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-### `.github/workflows/preview.yml`
+### `.github/workflows/release-preview.yml`
 
 由 `push` 事件（to `main`）触发：
 
