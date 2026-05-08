@@ -4,6 +4,20 @@ main = "src/index.ts"
 
 compatibility_date = "2024-01-01"
 
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1
+
 [ vars]
 GITHUB_APP_ID = "3589117"
 GITHUB_WEBHOOK_SECRET = "rss1102-release-toolkit-webhook-2026"
