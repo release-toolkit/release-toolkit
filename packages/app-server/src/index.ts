@@ -118,9 +118,9 @@ async function handleEvent(
 
     console.log('PR number:', pr.number, 'action:', event.action);
 
-    // 第一次创建 PR：评论提醒批准后才自动生成
-    if (event.action === 'opened') {
-      console.log('PR opened, commenting...');
+    // 第一次创建 PR 或 reopen：评论提醒批准后才自动生成
+    if (event.action === 'opened' || event.action === 'reopen') {
+      console.log('PR opened/reopened, commenting...');
       const token = await getInstallationToken(event.installation.id, env);
       await commentOnPR(token, pr.number, pr.base.repo.owner.login, pr.base.repo.name);
       return { success: true, message: `PR #${pr.number} - reminded user to approve` };
@@ -182,15 +182,27 @@ async function commentOnPR(
   owner: string,
   repo: string,
 ): Promise<void> {
-  const commentBody = `👋 感谢创建 PR！
+  const commentBody = `## Release Toolkit 已就绪 🎉
 
-⚠️ **提醒：** 本仓库已安装 \`release-toolkit\` App，
-只有当 PR **被批准（approved）后**，才会自动：
-1. 收集变更日志
-2. 更新 PR 描述体
-3. 保存变更快照
+感谢使用 **release-toolkit**，为你的 PR 提供自动化发布支持。
 
-➡️ **下一步：** 请找 Maintainer 批准此 PR 即可自动生成！`;
+---
+
+### ⚠️ 需要你对 PR 进行批准（Approve）
+
+- ✅ 收集变更日志
+- ✅ 更新 PR 描述体
+- ✅ 保存变更快照
+
+---
+
+💡 **提示：** 你也可以在 PR 描述中使用以下标记来添加变更日志：
+
+\`\`\`
+<!-- RELEASE-LOG-START -->
+你的额外变更说明...
+<!-- RELEASE-LOG-END -->
+\`\`\``;
 
   const response = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments`,
@@ -268,7 +280,7 @@ async function getInstallationTokenFromRepo(
   }
 
   const data = await response.json() as { id: number };
-  return getInstallationToken(data.id, context);
+  return getInstallationToken(data.id, env);
 }
 
 /** 获取 installation access token */
