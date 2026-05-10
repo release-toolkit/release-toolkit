@@ -4,11 +4,7 @@
  * 最小实现：接收 GitHub Webhook 事件，调用 @release-toolkit/core 功能
  */
 
-interface Env {
-  GITHUB_APP_ID: string;
-  GITHUB_APP_PRIVATE_KEY: string;
-  GITHUB_WEBHOOK_SECRET: string;
-}
+
 
 interface WebhookEvent {
   action?: string;
@@ -31,7 +27,7 @@ interface WebhookEvent {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, context: { GITHUB_APP_ID: string; GITHUB_APP_PRIVATE_KEY: string; GITHUB_WEBHOOK_SECRET: string }): Promise<Response> {
     if (request.method !== 'POST') {
       return new Response('Method Not Allowed', { status: 405 });
     }
@@ -46,7 +42,7 @@ export default {
     const body = await request.text();
 
     // 验证签名
-    const isValid = await verifySignature(body, signature, env.GITHUB_WEBHOOK_SECRET);
+    const isValid = await verifySignature(body, signature, context.GITHUB_WEBHOOK_SECRET);
     if (!isValid) {
       return new Response('Invalid signature', { status: 401 });
     }
@@ -54,7 +50,7 @@ export default {
     const event: WebhookEvent = JSON.parse(body);
 
     try {
-      const result = await handleEvent(eventType, event, env);
+      const result = await handleEvent(eventType, event, context);
       return new Response(JSON.stringify(result), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -102,7 +98,7 @@ async function safeEqual(a: string, b: string): Promise<boolean> {
 async function handleEvent(
   eventType: string,
   event: WebhookEvent,
-  env: Env,
+  context: { GITHUB_APP_ID: string; GITHUB_APP_PRIVATE_KEY: string; GITHUB_WEBHOOK_SECRET: string },
 ): Promise<Record<string, unknown>> {
   // pull_request 事件
   if (eventType === 'pull_request') {
@@ -113,7 +109,7 @@ async function handleEvent(
 
     // 第一次创建 PR：评论提醒批准后才自动生成
     if (event.action === 'opened') {
-      const token = await getInstallationToken(event.installation.id, env);
+      const token = await getInstallationToken(event.installation.id, context);
       await commentOnPR(token, pr.number, pr.base.repo.owner.login, pr.base.repo.name);
       return { success: true, message: `PR #${pr.number} - reminded user to approve` };
     }
@@ -124,7 +120,7 @@ async function handleEvent(
       return { success: true, message: `Skipped action: ${event.action}` };
     }
 
-    const token = await getInstallationToken(event.installation.id, env);
+    const token = await getInstallationToken(event.installation.id, context);
     await triggerWorkflow(
       token,
       pr.base.repo.owner.login,
@@ -149,7 +145,7 @@ async function handleEvent(
 
     // 获取 installation token
     // 注意：push 事件没有 installation 对象，需要从 JWT 获取
-    const token = await getInstallationTokenFromRepo(repo.full_name, env);
+    const token = await getInstallationTokenFromRepo(repo.full_name, context);
 
     await triggerWorkflow(
       token,
@@ -238,9 +234,9 @@ async function triggerWorkflow(
 /** 获取 installation token（从 push 事件） */
 async function getInstallationTokenFromRepo(
   fullName: string,
-  env: Env,
+  context: { GITHUB_APP_ID: string; GITHUB_APP_PRIVATE_KEY: string; GITHUB_WEBHOOK_SECRET: string },
 ): Promise<string> {
-  const jwt = await generateJWT(parseInt(env.GITHUB_APP_ID), env.GITHUB_APP_PRIVATE_KEY);
+  const jwt = await generateJWT(parseInt(context.GITHUB_APP_ID), context.GITHUB_APP_PRIVATE_KEY);
 
   // 获取 installation ID
   const response = await fetch(
@@ -259,15 +255,15 @@ async function getInstallationTokenFromRepo(
   }
 
   const data = await response.json() as { id: number };
-  return getInstallationToken(data.id, env);
+  return getInstallationToken(data.id, context);
 }
 
 /** 获取 installation access token */
 async function getInstallationToken(
   installationId: number,
-  env: Env,
+  context: { GITHUB_APP_ID: string; GITHUB_APP_PRIVATE_KEY: string; GITHUB_WEBHOOK_SECRET: string },
 ): Promise<string> {
-  const jwt = await generateJWT(parseInt(env.GITHUB_APP_ID), env.GITHUB_APP_PRIVATE_KEY);
+  const jwt = await generateJWT(parseInt(context.GITHUB_APP_ID), context.GITHUB_APP_PRIVATE_KEY);
 
   const response = await fetch(
     `https://api.github.com/app/installations/${installationId}/access_tokens`,
