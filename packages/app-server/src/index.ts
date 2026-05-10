@@ -28,12 +28,12 @@ interface WebhookEvent {
 
 export default {
   async fetch(request: Request, env: Record<string, string | undefined>): Promise<Response> {
-    console.log('Received request, method:', request.method);
-    console.log('Available env keys:', Object.keys(env));
-    console.log('GITHUB_APP_ID:', env.GITHUB_APP_ID);
-    console.log('GITHUB_WEBHOOK_SECRET:', env.GITHUB_WEBHOOK_SECRET ? env.GITHUB_WEBHOOK_SECRET.substring(0, 10) + '...' : 'undefined');
-    console.log('GITHUB_APP_PRIVATE_KEY exists:', !!env.GITHUB_APP_PRIVATE_KEY);
-    console.log('GITHUB_APP_PRIVATE_KEY length:', env.GITHUB_APP_PRIVATE_KEY?.length);
+    console.log('[DEBUG] Received request, method:', request.method);
+    console.log('[DEBUG] Available env keys:', Object.keys(env));
+    console.log('[DEBUG] GITHUB_APP_ID:', env.GITHUB_APP_ID);
+    console.log('[DEBUG] GITHUB_WEBHOOK_SECRET exists:', !!env.GITHUB_WEBHOOK_SECRET);
+    console.log('[DEBUG] GITHUB_APP_PRIVATE_KEY exists:', !!env.GITHUB_APP_PRIVATE_KEY);
+    console.log('[DEBUG] GITHUB_APP_PRIVATE_KEY length:', env.GITHUB_APP_PRIVATE_KEY?.length);
 
     if (request.method !== 'POST') {
       return new Response('Method Not Allowed', { status: 405 });
