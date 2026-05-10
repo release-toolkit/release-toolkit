@@ -15,15 +15,9 @@ interface WebhookEvent {
     base: { ref: string; repo: { owner: { login: string }; name: string } };
     head: { ref: string };
   };
-  repository?: {
-    owner: { login: string };
-    name: string;
-    full_name: string;
-  };
   installation?: {
     id: number;
   };
-  ref?: string;
 }
 
 export default {
@@ -153,28 +147,6 @@ async function handleEvent(
     };
   }
 
-  // push 事件：触发 releasePreview
-  if (eventType === 'push') {
-    const repo = event.repository;
-    if (!repo) {
-      return { success: false, message: 'Missing repository data' };
-    }
-
-    // 获取 installation token
-    // 注意：push 事件没有 installation 对象，需要从 JWT 获取
-    const token = await getInstallationTokenFromRepo(repo.full_name, env);
-
-    await triggerWorkflow(
-      token,
-      repo.owner.login,
-      repo.name,
-      'release-preview.yml',
-      {},
-      event.ref ?? 'main',
-    );
-
-    return { success: true, message: 'Push event - triggered preview workflow' };
-  }
 
   return { success: true, message: `Unhandled event: ${eventType}` };
 }
@@ -258,43 +230,6 @@ async function triggerWorkflow(
     const text = await response.text();
     throw new Error(`Failed to trigger ${workflow}: ${response.status} ${text}`);
   }
-}
-
-/** 获取 installation token（从 push 事件） */
-async function getInstallationTokenFromRepo(
-  fullName: string,
-  env: Record<string, string>,
-): Promise<string> {
-  console.log('Getting installation for repo:', fullName);
-  console.log('GITHUB_APP_ID:', env.GITHUB_APP_ID);
-  console.log('GITHUB_APP_PRIVATE_KEY length:', env.GITHUB_APP_PRIVATE_KEY?.length);
-
-  const jwt = await generateJWT(parseInt(env.GITHUB_APP_ID), env.GITHUB_APP_PRIVATE_KEY);
-  console.log('Generated JWT');
-
-  // 获取 installation ID
-  const response = await fetch(
-    `https://api.github.com/repos/${fullName}/installation`,
-    {
-      headers: {
-        Authorization: `Bearer ${jwt}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-        'User-Agent': 'release-toolkit-app',
-      },
-    },
-  );
-
-  console.log('Installation response status:', response.status);
-  const responseBody = await response.text();
-  console.log('Installation response body:', responseBody);
-
-  if (!response.ok) {
-    throw new Error(`Failed to get installation: ${response.status} - ${responseBody}`);
-  }
-
-  const data = JSON.parse(responseBody) as { id: number };
-  return getInstallationToken(data.id, env);
 }
 
 /** 获取 installation access token */
