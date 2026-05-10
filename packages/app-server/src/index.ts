@@ -27,9 +27,13 @@ interface WebhookEvent {
 }
 
 export default {
-  async fetch(request: Request, env: Record<string, string>): Promise<Response> {
+  async fetch(request: Request, env: Record<string, string | undefined>): Promise<Response> {
     console.log('Received request, method:', request.method);
     console.log('Available env keys:', Object.keys(env));
+    console.log('GITHUB_APP_ID:', env.GITHUB_APP_ID);
+    console.log('GITHUB_WEBHOOK_SECRET:', env.GITHUB_WEBHOOK_SECRET ? env.GITHUB_WEBHOOK_SECRET.substring(0, 10) + '...' : 'undefined');
+    console.log('GITHUB_APP_PRIVATE_KEY exists:', !!env.GITHUB_APP_PRIVATE_KEY);
+    console.log('GITHUB_APP_PRIVATE_KEY length:', env.GITHUB_APP_PRIVATE_KEY?.length);
 
     if (request.method !== 'POST') {
       return new Response('Method Not Allowed', { status: 405 });
@@ -56,7 +60,7 @@ export default {
     const event: WebhookEvent = JSON.parse(body);
 
     try {
-      const result = await handleEvent(eventType, event, env);
+      const result = await handleEvent(eventType, event, env as Record<string, string>);
       return new Response(JSON.stringify(result), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -261,7 +265,12 @@ async function getInstallationTokenFromRepo(
   fullName: string,
   env: Record<string, string>,
 ): Promise<string> {
+  console.log('Getting installation for repo:', fullName);
+  console.log('GITHUB_APP_ID:', env.GITHUB_APP_ID);
+  console.log('GITHUB_APP_PRIVATE_KEY length:', env.GITHUB_APP_PRIVATE_KEY?.length);
+
   const jwt = await generateJWT(parseInt(env.GITHUB_APP_ID), env.GITHUB_APP_PRIVATE_KEY);
+  console.log('Generated JWT');
 
   // 获取 installation ID
   const response = await fetch(
@@ -275,11 +284,15 @@ async function getInstallationTokenFromRepo(
     },
   );
 
+  console.log('Installation response status:', response.status);
+  const responseBody = await response.text();
+  console.log('Installation response body:', responseBody);
+
   if (!response.ok) {
-    throw new Error(`Failed to get installation: ${response.status}`);
+    throw new Error(`Failed to get installation: ${response.status} - ${responseBody}`);
   }
 
-  const data = await response.json() as { id: number };
+  const data = JSON.parse(responseBody) as { id: number };
   return getInstallationToken(data.id, env);
 }
 
