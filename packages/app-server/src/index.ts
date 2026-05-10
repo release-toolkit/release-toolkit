@@ -280,6 +280,7 @@ async function getInstallationTokenFromRepo(
         Authorization: `Bearer ${jwt}`,
         Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'release-toolkit-app',
       },
     },
   );
