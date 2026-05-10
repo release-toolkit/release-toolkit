@@ -27,7 +27,10 @@ interface WebhookEvent {
 }
 
 export default {
-  async fetch(request: Request, context: { GITHUB_APP_ID: string; GITHUB_APP_PRIVATE_KEY: string; GITHUB_WEBHOOK_SECRET: string }): Promise<Response> {
+  async fetch(request: Request, env: Record<string, string>): Promise<Response> {
+    console.log('Received request, method:', request.method);
+    console.log('Available env keys:', Object.keys(env));
+
     if (request.method !== 'POST') {
       return new Response('Method Not Allowed', { status: 405 });
     }
@@ -42,7 +45,10 @@ export default {
     const body = await request.text();
 
     // 验证签名
-    const isValid = await verifySignature(body, signature, context.GITHUB_WEBHOOK_SECRET);
+    const secret = env.GITHUB_WEBHOOK_SECRET || '';
+    console.log('Secret length:', secret.length);
+    const isValid = await verifySignature(body, signature, secret);
+    console.log('Signature valid:', isValid);
     if (!isValid) {
       return new Response('Invalid signature', { status: 401 });
     }
@@ -50,12 +56,13 @@ export default {
     const event: WebhookEvent = JSON.parse(body);
 
     try {
-      const result = await handleEvent(eventType, event, context);
+      const result = await handleEvent(eventType, event, env);
       return new Response(JSON.stringify(result), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
     } catch (error) {
+      console.error('Error:', error);
       return new Response(JSON.stringify({ error: String(error) }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
@@ -98,8 +105,10 @@ async function safeEqual(a: string, b: string): Promise<boolean> {
 async function handleEvent(
   eventType: string,
   event: WebhookEvent,
-  context: { GITHUB_APP_ID: string; GITHUB_APP_PRIVATE_KEY: string; GITHUB_WEBHOOK_SECRET: string },
+  env: Record<string, string>,
 ): Promise<Record<string, unknown>> {
+  console.log('Handling event:', eventType, 'action:', event.action);
+
   // pull_request 事件
   if (eventType === 'pull_request') {
     const pr = event.pull_request;
@@ -107,9 +116,12 @@ async function handleEvent(
       return { success: false, message: 'Missing PR or installation data' };
     }
 
+    console.log('PR number:', pr.number, 'action:', event.action);
+
     // 第一次创建 PR：评论提醒批准后才自动生成
     if (event.action === 'opened') {
-      const token = await getInstallationToken(event.installation.id, context);
+      console.log('PR opened, commenting...');
+      const token = await getInstallationToken(event.installation.id, env);
       await commentOnPR(token, pr.number, pr.base.repo.owner.login, pr.base.repo.name);
       return { success: true, message: `PR #${pr.number} - reminded user to approve` };
     }
@@ -120,7 +132,8 @@ async function handleEvent(
       return { success: true, message: `Skipped action: ${event.action}` };
     }
 
-    const token = await getInstallationToken(event.installation.id, context);
+    console.log('PR updated, triggering workflow...');
+    const token = await getInstallationToken(event.installation.id, env);
     await triggerWorkflow(
       token,
       pr.base.repo.owner.login,
@@ -145,7 +158,7 @@ async function handleEvent(
 
     // 获取 installation token
     // 注意：push 事件没有 installation 对象，需要从 JWT 获取
-    const token = await getInstallationTokenFromRepo(repo.full_name, context);
+    const token = await getInstallationTokenFromRepo(repo.full_name, env);
 
     await triggerWorkflow(
       token,
@@ -234,9 +247,9 @@ async function triggerWorkflow(
 /** 获取 installation token（从 push 事件） */
 async function getInstallationTokenFromRepo(
   fullName: string,
-  context: { GITHUB_APP_ID: string; GITHUB_APP_PRIVATE_KEY: string; GITHUB_WEBHOOK_SECRET: string },
+  env: Record<string, string>,
 ): Promise<string> {
-  const jwt = await generateJWT(parseInt(context.GITHUB_APP_ID), context.GITHUB_APP_PRIVATE_KEY);
+  const jwt = await generateJWT(parseInt(env.GITHUB_APP_ID), env.GITHUB_APP_PRIVATE_KEY);
 
   // 获取 installation ID
   const response = await fetch(
@@ -261,9 +274,9 @@ async function getInstallationTokenFromRepo(
 /** 获取 installation access token */
 async function getInstallationToken(
   installationId: number,
-  context: { GITHUB_APP_ID: string; GITHUB_APP_PRIVATE_KEY: string; GITHUB_WEBHOOK_SECRET: string },
+  env: Record<string, string>,
 ): Promise<string> {
-  const jwt = await generateJWT(parseInt(context.GITHUB_APP_ID), context.GITHUB_APP_PRIVATE_KEY);
+  const jwt = await generateJWT(parseInt(env.GITHUB_APP_ID), env.GITHUB_APP_PRIVATE_KEY);
 
   const response = await fetch(
     `https://api.github.com/app/installations/${installationId}/access_tokens`,
