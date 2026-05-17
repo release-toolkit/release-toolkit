@@ -38,6 +38,8 @@ interface GithubContext {
   repoOwner: string;
   repoName: string;
   token?: string;
+  /** Worker 环境下已认证的 octokit 实例 */
+  octokit?: unknown;
 }
 
 interface PRLogCollectorResult {
@@ -150,9 +152,14 @@ async function runPRLogCollector(
   const body = `${notification}\n\n---\n\n${preview}\n\n---\n\n${guide}`;
 
   try {
-    // 使用 token 认证（Worker 环境）
-    const { Octokit } = await import('octokit');
-    const octokit = new Octokit({ auth: context.token });
+    // Worker 环境使用已认证的 octokit 实例，否则使用 token
+    let octokit;
+    if (context.octokit) {
+      octokit = context.octokit as { rest: { issues: { createComment: (params: unknown) => Promise<unknown> } } };
+    } else {
+      const { Octokit } = await import('octokit');
+      octokit = new Octokit({ auth: context.token });
+    }
     await octokit.rest.issues.createComment({
       owner: context.repoOwner,
       repo: context.repoName,
@@ -483,6 +490,7 @@ export default {
 
       // 获取 installation token
       let token: string | undefined;
+      let authenticatedOctokit: GithubContext['octokit'];
       if (env.GITHUB_APP_ID && env.GITHUB_APP_PRIVATE_KEY) {
         try {
           const { App } = await import('octokit');
@@ -491,17 +499,15 @@ export default {
             privateKey: env.GITHUB_APP_PRIVATE_KEY,
           });
           const installationId = payload.installation?.id as number | undefined;
+          console.log(`[webhook] payload.installation:`, JSON.stringify(payload.installation));
+          console.log(`[webhook] installationId:`, installationId);
           if (installationId) {
             // 使用 getInstallationOctokit 获取已认证的 octokit 实例
-            const octokit = await app.getInstallationOctokit(installationId);
-            // 从 octokit 实例中获取 token
-            const auth = (octokit as unknown as { auth: string }).auth;
-            if (typeof auth === 'string') {
-              token = auth;
-            }
+            authenticatedOctokit = await app.getInstallationOctokit(installationId);
+            console.log(`[webhook] Got authenticated octokit for installation ${installationId}`);
           }
         } catch (err) {
-          console.error('[webhook] Failed to get installation token:', err);
+          console.error('[webhook] Failed to get installation octokit:', err);
         }
       }
 
@@ -512,6 +518,7 @@ export default {
         repoOwner: repoInfo.owner,
         repoName: repoInfo.repo,
         token,
+        octokit: authenticatedOctokit,
       };
 
       console.log(`[webhook] Processing ${eventType} for ${repoInfo.owner}/${repoInfo.repo}`);
