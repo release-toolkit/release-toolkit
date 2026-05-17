@@ -29,13 +29,31 @@ export default {
 
       // 手动解析 JSON
       const payload = JSON.parse(body);
-      const { owner, repo } = payload.repository;
 
       // 从 installation payload 获取 installation_id
       const installationId = payload.installation?.id;
       if (!installationId) {
         console.error('No installation_id in payload');
         return new Response(JSON.stringify({ success: false, error: 'No installation_id' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
+
+      // 根据事件类型获取 repo 信息
+      let owner: string;
+      let repo: string;
+
+      if (eventType === 'pull_request') {
+        // pull_request 事件: repository 在 pull_request.base.repo 中
+        owner = payload.pull_request?.base?.repo?.owner?.login;
+        repo = payload.pull_request?.base?.repo?.name;
+      } else {
+        // 其他事件: 使用顶层 repository
+        owner = payload.repository?.owner?.login;
+        repo = payload.repository?.name;
+      }
+
+      if (!owner || !repo) {
+        console.error('No owner/repo in payload', { eventType, payload });
+        return new Response(JSON.stringify({ success: false, error: 'No owner/repo found' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       }
 
       // 获取 installation 对应的 octokit 实例
@@ -45,13 +63,13 @@ export default {
       });
       const octokit = await app.getInstallationOctokit(installationId);
 
-      console.log('Repo info:', { owner: owner.login, repo, issue_number: payload.pull_request.number });
+      console.log('Repo info:', { owner, repo, issue_number: payload.pull_request.number });
 
       // opened + reopened：发欢迎评论
       if (eventType === 'pull_request' && (payload.action === 'opened' || payload.action === 'reopened')) {
         console.log('PR opened/reopened, sending welcome comment');
         await octokit.rest.issues.createComment({
-          owner: owner.login,
+          owner,
           repo,
           issue_number: payload.pull_request.number,
           body: WELCOME_MSG,
@@ -63,7 +81,7 @@ export default {
       if (eventType === 'pull_request' && payload.action === 'closed' && payload.pull_request.merged) {
         console.log('PR merged, sending merged comment');
         await octokit.rest.issues.createComment({
-          owner: owner.login,
+          owner,
           repo,
           issue_number: payload.pull_request.number,
           body: MERGED_MSG,
