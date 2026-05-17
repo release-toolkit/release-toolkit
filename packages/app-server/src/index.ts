@@ -12,7 +12,7 @@
  * - PR 合并到 main → releasePublisher（发布）
  */
 
-import { App } from 'octokit';
+
 
 // ============================================================================
 // 常量定义
@@ -150,11 +150,9 @@ async function runPRLogCollector(
   const body = `${notification}\n\n---\n\n${preview}\n\n---\n\n${guide}`;
 
   try {
-    const app = new App({
-      appId: Number(context.isGitHubActions ? process.env.GITHUB_APP_ID : ''),
-      privateKey: (context.isGitHubActions ? process.env.GITHUB_APP_PRIVATE_KEY : '') ?? '',
-    });
-    const octokit = await app.getInstallationOctokit(Number(context.token ?? 0));
+    // 使用 token 认证（Worker 环境）
+    const { Octokit } = await import('octokit');
+    const octokit = new Octokit({ auth: context.token });
     await octokit.rest.issues.createComment({
       owner: context.repoOwner,
       repo: context.repoName,
@@ -257,11 +255,9 @@ async function triggerLogWrite(
   console.log(`[logWrite] Triggering log write for PR #${prNumber}`);
 
   try {
-    const app = new App({
-      appId: Number(context.isGitHubActions ? process.env.GITHUB_APP_ID : ''),
-      privateKey: (context.isGitHubActions ? process.env.GITHUB_APP_PRIVATE_KEY : '') ?? '',
-    });
-    const octokit = await app.getInstallationOctokit(Number(context.token ?? 0));
+    // 使用 token 认证
+    const { Octokit } = await import('octokit');
+    const octokit = new Octokit({ auth: context.token });
 
     // 获取当前 PR 描述体
     const { data } = await octokit.rest.pulls.get({
