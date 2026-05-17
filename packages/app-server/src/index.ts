@@ -450,10 +450,8 @@ export default {
       return jsonResponse({ success: false, error: 'Method Not Allowed' }, 405);
     }
 
-    // 2. 验证配置
-    if (!env.GITHUB_APP_ID || !env.GITHUB_APP_PRIVATE_KEY) {
-      return jsonResponse({ success: false, error: 'Server misconfigured: missing GITHUB_APP_ID or GITHUB_APP_PRIVATE_KEY' }, 500);
-    }
+    // 2. 验证配置（Worker 环境使用 token 认证，不需要 appId/privateKey）
+    // 注意：如果需要 App 认证，需要设置 GITHUB_APP_ID 和 GITHUB_APP_PRIVATE_KEY
 
     try {
       // 3. 读取请求
@@ -483,13 +481,37 @@ export default {
         return jsonResponse({ success: false, error: 'No repo info' }, 400);
       }
 
+      // 获取 installation token
+      let token: string | undefined;
+      if (env.GITHUB_APP_ID && env.GITHUB_APP_PRIVATE_KEY) {
+        try {
+          const { App } = await import('octokit');
+          const app = new App({
+            appId: Number(env.GITHUB_APP_ID),
+            privateKey: env.GITHUB_APP_PRIVATE_KEY,
+          });
+          const installationId = payload.installation?.id as number | undefined;
+          if (installationId) {
+            // 使用 getInstallationOctokit 获取已认证的 octokit 实例
+            const octokit = await app.getInstallationOctokit(installationId);
+            // 从 octokit 实例中获取 token
+            const auth = (octokit as unknown as { auth: string }).auth;
+            if (typeof auth === 'string') {
+              token = auth;
+            }
+          }
+        } catch (err) {
+          console.error('[webhook] Failed to get installation token:', err);
+        }
+      }
+
       const context: GithubContext = {
         isGitHubActions: false,
         eventName: eventType,
         prNumber: payload.pull_request?.number as number | undefined,
         repoOwner: repoInfo.owner,
         repoName: repoInfo.repo,
-        token: undefined,
+        token,
       };
 
       console.log(`[webhook] Processing ${eventType} for ${repoInfo.owner}/${repoInfo.repo}`);
