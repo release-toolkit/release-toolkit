@@ -1,4 +1,5 @@
 import { App } from 'octokit';
+import { createHmac } from 'crypto';
 
 interface Env {
   GITHUB_APP_ID?: string;
@@ -16,10 +17,28 @@ export default {
       return new Response('Server misconfigured', { status: 500 });
     }
 
+    const body = await request.text();
+    const signature = request.headers.get('X-Hub-Signature-256') ?? request.headers.get('X-Hub-Signature') ?? '';
+    const eventType = request.headers.get('X-GitHub-Event') ?? '';
+    const deliveryId = request.headers.get('X-GitHub-Delivery') ?? '';
+
+    // DEBUG: 手动计算签名对比
+    const secret = env.GITHUB_WEBHOOK_SECRET;
+    const hmac = createHmac('sha256', secret);
+    hmac.update(body);
+    const expected = `sha256=${hmac.digest('hex')}`;
+    console.error('DEBUG', {
+      expected: expected,
+      received: signature,
+      match: expected === signature,
+      body_len: body.length,
+      event: eventType,
+    });
+
     const app = new App({
       appId: Number(env.GITHUB_APP_ID),
       privateKey: env.GITHUB_APP_PRIVATE_KEY,
-      webhooks: { secret: env.GITHUB_WEBHOOK_SECRET },
+      webhooks: { secret },
     });
 
     // opened + reopened：发欢迎评论
@@ -51,21 +70,9 @@ export default {
     });
 
     try {
-      const body = await request.text();
-      const signature = request.headers.get('X-Hub-Signature-256') ?? request.headers.get('X-Hub-Signature') ?? '';
-      // DEBUG: 临时调试，确认后删除
-      console.error('DEBUG', {
-        secret_len: env.GITHUB_WEBHOOK_SECRET.length,
-        secret_repr: JSON.stringify(env.GITHUB_WEBHOOK_SECRET),
-        body_len: body.length,
-        signature,
-        event: request.headers.get('X-GitHub-Event'),
-        delivery: request.headers.get('X-GitHub-Delivery'),
-      });
-
       await app.webhooks.verifyAndReceive({
-        id: request.headers.get('X-GitHub-Delivery') ?? '',
-        name: request.headers.get('X-GitHub-Event') ?? '',
+        id: deliveryId,
+        name: eventType,
         payload: body,
         signature,
       });
