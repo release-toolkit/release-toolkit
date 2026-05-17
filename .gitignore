@@ -9,3 +9,4 @@ dist/
 .codebuddy/
 
 *.pem
+.dev.vars
