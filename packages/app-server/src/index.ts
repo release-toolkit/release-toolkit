@@ -1,12 +1,7 @@
-import { App } from 'octokit';
-
 interface Env {
   GITHUB_APP_ID?: string;
   GITHUB_APP_PRIVATE_KEY?: string;
 }
-
-const WELCOME_MSG = 'Release Toolkit 已就绪 🎉\n\n当你准备好发布时，请将 PR 设为 "Ready for review"。';
-const MERGED_MSG = 'PR 已合并，Release Toolkit 正在准备发布预览...';
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -22,11 +17,6 @@ export default {
 
       console.log('Received webhook:', eventType, 'deliveryId:', deliveryId);
 
-      const app = new App({
-        appId: Number(env.GITHUB_APP_ID),
-        privateKey: env.GITHUB_APP_PRIVATE_KEY,
-      });
-
       // 手动解析 JSON
       const payload = JSON.parse(body);
       const { owner, repo } = payload.repository;
@@ -38,46 +28,21 @@ export default {
         return new Response(JSON.stringify({ success: false, error: 'No installation_id' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       }
 
-      // 获取 installation 对应的 octokit 实例
-      const octokit = await app.getInstallationOctokit(installationId);
+      console.log('Repo info:', { owner: owner.login, repo, issue_number: payload.pull_request.number });
 
-      // opened + reopened：发欢迎评论
+      // opened + reopened：记录日志
       if (eventType === 'pull_request' && (payload.action === 'opened' || payload.action === 'reopened')) {
-        console.log('PR opened/reopened, sending welcome comment');
-        await octokit.rest.issues.createComment({
-          owner: owner.login,
-          repo,
-          issue_number: payload.pull_request.number,
-          body: WELCOME_MSG,
-        });
+        console.log('PR opened/reopened');
       }
 
-      // merged：发合并评论
+      // merged：记录日志
       if (eventType === 'pull_request' && payload.action === 'closed' && payload.pull_request.merged) {
-        console.log('PR merged, sending merged comment');
-        await octokit.rest.issues.createComment({
-          owner: owner.login,
-          repo,
-          issue_number: payload.pull_request.number,
-          body: MERGED_MSG,
-        });
+        console.log('PR merged');
       }
 
-      // synchronize + ready_for_review：记录日志（暂时跳过 workflow 触发）
+      // synchronize + ready_for_review：记录日志
       if (eventType === 'pull_request' && (payload.action === 'synchronize' || payload.action === 'ready_for_review')) {
         console.log('PR synchronized/ready_for_review');
-        // 需要先获取 workflow 的数字 ID
-        // const workflows = await octokit.rest.actions.listRepoWorkflows({ owner: owner.login, repo });
-        // const workflow = workflows.data.find((w: any) => w.name === 'pr-log-collector.yml');
-        // if (workflow) {
-        //   await octokit.rest.actions.createWorkflowDispatch({
-        //     owner: owner.login,
-        //     repo,
-        //     workflow_id: workflow.id,
-        //     ref: payload.pull_request.head.ref,
-        //     inputs: { pr_number: String(payload.pull_request.number) },
-        //   });
-        // }
       }
 
       console.log('Webhook processed successfully');
