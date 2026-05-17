@@ -5,7 +5,7 @@ CLI 入口，提供 `release` 命令调用核心功能。
 ## 使用
 
 ```bash
-release --help
+pnpm dlx @release-toolkit/cli --help
 ```
 
 ## 命令
@@ -38,3 +38,11 @@ publish 命令按以下顺序执行：
   run: |
     pnpm dlx @release-toolkit/cli publish
 ```
+
+## API
+
+```typescript
+import { previewRelease, publishRelease } from '@release-toolkit/cli';
+```
+
+详见 [架构文档](https://github.com/release-toolkit/release-toolkit/tree/dev/docs/architecture)

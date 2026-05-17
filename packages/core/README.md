@@ -65,3 +65,18 @@ flowchart TD
 | `command` | Shell 命令 |
 | `script` | 项目脚本文件 |
 | `package` | npm 包 |
+
+## API
+
+```typescript
+import {
+  collectPRLog,
+  previewRelease,
+  publishRelease,
+  loadConfig,
+  loadPlugins,
+  postOrUpdateComment,
+} from '@release-toolkit/core';
+```
+
+详见 [架构文档](https://github.com/release-toolkit/release-toolkit/tree/dev/docs/architecture)

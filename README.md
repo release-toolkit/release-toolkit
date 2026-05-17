@@ -21,7 +21,7 @@ flowchart TD
     end
 
     subgraph 发布阶段
-        E[PR 合并到 main] --> F[releasePublisher]
+        E[PR 合并到 main + Approve] --> F[releasePublisher]
         F --> F1[beforePublish 钩子]
         F1 --> F2[beforeTag 钩子]
         F2 --> F3[创建 Git Tags]

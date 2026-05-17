@@ -25,7 +25,7 @@ https://release-toolkit-app.your-subdomain.workers.dev
 
 ### General 页面：
 - **Webhook URL**: 填入上一步的 Worker URL
-- **Webhook secret**: `rss1102-release-toolkit-webhook-2026`
+- **Webhook secret**: 与 `wrangler.toml` 中配置的 `GITHUB_WEBHOOK_SECRET` 一致
 
 ### Permissions & events 页面：
 **Permissions**:
@@ -59,7 +59,7 @@ npx wrangler tail
 ## 4. 测试流程
 
 1. 创建 PR 到 `dev` 分支
-2. 检查 PR 下方是否有评论（内容应包含 "感谢创建 PR！"）
+2. 检查 PR 下方是否有评论（内容应包含 "Release Toolkit 已就绪"）
 3. 如果没有评论，检查：
    - Cloudflare Worker 日志
    - GitHub App 的 Webhook 交付记录

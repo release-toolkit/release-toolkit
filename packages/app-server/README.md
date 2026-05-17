@@ -7,12 +7,11 @@
 ```
 src/
 ├── index.ts          # Worker 入口，fetch handler + 签名验证
-├── handlers/         # 事件处理器
-│   └── pr-handler.ts # PR 事件处理
-└── utils/            # 工具函数
-    ├── crypto.ts     # HMAC 签名验证
-    ├── jwt.ts        # GitHub App JWT 生成
-    └── http.ts       # GitHub API 请求封装
+├── handler.ts        # 事件分发处理（PR、Installation 事件）
+├── verify.ts         # Webhook 签名验证
+├── jwt.ts            # GitHub App JWT 生成
+├── github.ts         # GitHub API 调用封装
+└── types.ts          # 类型定义
 ```
 
 ## 流程
@@ -25,31 +24,29 @@ flowchart TD
     C -->|成功| E{事件类型}
 
     E -->|pull_request| F{PR action}
-    F -->|opened / reopened| G[生成 JWT → 获取 Token → 评论 PR]
-    F -->|synchronize / edited / ready_for_review| H[生成 JWT → 获取 Token → 触发 pr-log-collector workflow]
-    F -->|其他| I[跳过]
+    F -->|opened / reopened| G[评论 PR - 发布预览]
+    F -->|closed| H{已合并?}
+    H -->|是| I[触发 release-preview workflow]
+    H -->|否| J[跳过]
+    F -->|installed| K[处理安装事件]
 
-    E -->|其他事件| J[返回未处理]
+    E -->|其他事件| L[返回未处理]
 
-    G --> K[Response 200]
-    H --> K
-    I --> K
-    J --> K
+    G --> M[Response 200]
+    I --> M
+    J --> M
+    K --> M
+    L --> M
 ```
 
 ## PR 处理逻辑
 
 | Action | 行为 |
 |--------|------|
-| `opened` / `reopened` | 发送欢迎评论，提醒用户 Approve |
-| `synchronize` / `edited` / `ready_for_review` | 调用 `@release-toolkit/core` 收集日志 |
+| `opened` / `reopened` | 发送发布预览评论 |
+| `closed`（已合并） | 触发 release-preview workflow |
+| `installed` | 处理 App 安装事件 |
 | 其他 | 跳过 |
-
-## 架构优势
-
-- **统一入口**：App Server 直接调用 core，无需 workflow 中转
-- **减少延迟**：无需等待 workflow 排队和执行
-- **简化配置**：不需要额外的 workflow 文件
 
 ## 环境变量
 
@@ -58,6 +55,9 @@ flowchart TD
 | `GITHUB_APP_ID` | GitHub App ID |
 | `GITHUB_WEBHOOK_SECRET` | Webhook 签名密钥 |
 | `GITHUB_APP_PRIVATE_KEY` | GitHub App 私钥（PEM 格式） |
+| `GITHUB_WORKFLOW_ID` | 要触发的 workflow ID |
+| `GITHUB_OWNER` | 仓库所有者 |
+| `GITHUB_REPO` | 仓库名称 |
 
 ## 部署
 
@@ -71,5 +71,13 @@ npm install -g wrangler
 wrangler login
 
 # 部署
-wrangler deploy
+cd packages/app-server
+pnpm run deploy
+```
+
+## 本地开发
+
+```bash
+cd packages/app-server
+pnpm run dev
 ```
