@@ -4,9 +4,9 @@
  * 接收 GitHub Webhook 事件，调用 @release-toolkit/core 功能
  */
 
-import { verifySignature } from './verify.js';
-import { dispatchEvent } from './handler.js';
-import type { HandlerContext } from './handler.js';
+import { verifySignature } from './verify.ts';
+import { dispatchEvent } from './handler.ts';
+import type { HandlerContext } from './handler.ts';
 // 为将来集成准备，暂时禁用未使用警告
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { previewRelease } from '@release-toolkit/core';
@@ -47,7 +47,7 @@ export default {
       const event = JSON.parse(body) as Parameters<typeof dispatchEvent>[0];
 
       // 调试日志
-      console.log('Received webhook event:', event.name, event.action);
+      console.log('Received webhook event:', event.action);
 
       // 构建处理上下文
       const context: HandlerContext = {

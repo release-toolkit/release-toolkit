@@ -1,12 +1,12 @@
-import type { WebhookEvent } from './types.js';
-import { generateJWT } from './jwt.js';
+import type { WebhookEvent } from './types.ts';
+import { generateJWT } from './jwt.ts';
 import {
-  createGitHubClient,
+  createAuthenticatedClientWithInstallation,
   commentOnPR,
   triggerWorkflow,
   getPRTitle,
   getPRBody,
-} from './github.js';
+} from './github.ts';
 import type { Octokit } from 'octokit';
 
 /**
@@ -28,7 +28,7 @@ export async function handlePREvent(
   event: WebhookEvent,
   context: HandlerContext
 ): Promise<void> {
-  const { pull_request } = event;
+  const { pull_request, installation } = event;
 
   if (!pull_request) {
     throw new Error('Missing pull_request in event');
@@ -36,11 +36,16 @@ export async function handlePREvent(
 
   const { number: prNumber, merged, base } = pull_request;
   const { owner, repo } = context;
+  const installationId = installation?.id;
 
-  console.log('Handling PR event:', { prNumber, merged, action: event.action });
+  if (!installationId) {
+    throw new Error('Missing installation.id in event');
+  }
+
+  console.log('Handling PR event:', { prNumber, merged, action: event.action, installationId });
 
   // 创建 GitHub 客户端（使用安装的 token）
-  const octokit = await createAuthenticatedClient(context);
+  const octokit = await createAuthenticatedClient(context, installationId);
 
   if (merged) {
     // 处理已合并的 PR：触发 release-preview workflow
@@ -89,26 +94,24 @@ export async function handleInstallationEvent(
     throw new Error('Missing installation in event');
   }
 
-  const { id: _installationId } = installation; // eslint-disable-line @typescript-eslint/no-unused-vars
-  // 更新 installationId（如果需要持久化）
-  // 这里可以扩展为更新配置或数据库
+  const { id: installationId } = installation;
+  console.log('App installed with installationId:', installationId);
 }
 
 /**
  * 创建已认证的 GitHub 客户端
  */
-async function createAuthenticatedClient(context: HandlerContext): Promise<Octokit> {
+async function createAuthenticatedClient(
+  context: HandlerContext,
+  installationId: number
+): Promise<Octokit> {
   const { appId, privateKeyPem } = context;
 
   // 生成 JWT
-  await generateJWT(appId, privateKeyPem);
+  const jwt = await generateJWT(appId, privateKeyPem);
 
-  // 获取 installation token
-  // 注意：这里需要知道 installationId，可能需要从配置或数据库中获取
-  // 当前简化实现，直接使用 token 模式
-  const octokit = createGitHubClient({ token: '' }); // 需要扩展
-
-  return octokit;
+  // 使用 JWT + installationId 获取 access token
+  return createAuthenticatedClientWithInstallation(jwt, installationId);
 }
 
 /**
@@ -134,4 +137,3 @@ export async function dispatchEvent(
       break;
   }
 }
-

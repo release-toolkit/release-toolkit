@@ -2,8 +2,7 @@ import { Octokit } from 'octokit';
 
 interface GitHubClientOptions {
   token?: string;
-  appId?: number;
-  privateKeyPem?: string;
+  jwt?: string;
   installationId?: number;
 }
 
@@ -11,7 +10,7 @@ interface GitHubClientOptions {
  * 创建 GitHub 客户端
  */
 export function createGitHubClient(options: GitHubClientOptions): Octokit {
-  const { token, appId, privateKeyPem, installationId } = options;
+  const { token, jwt, installationId } = options;
 
   if (token) {
     return new Octokit({
@@ -20,15 +19,32 @@ export function createGitHubClient(options: GitHubClientOptions): Octokit {
     });
   }
 
-  if (appId && privateKeyPem && installationId) {
-    // 使用 app 模式需要动态获取 token
-    // 这里返回一个基础客户端，实际调用时需要先获取 token
+  if (jwt && installationId) {
+    // 使用 JWT + installationId 获取 access token（后续调用时会处理）
     return new Octokit({
+      auth: jwt,
       userAgent: 'release-toolkit',
     });
   }
 
-  throw new Error('Must provide either token or appId with privateKeyPem and installationId');
+  throw new Error('Must provide either token or jwt with installationId');
+}
+
+/**
+ * 使用 JWT 和 installationId 获取 access token 并创建认证客户端
+ */
+export async function createAuthenticatedClientWithInstallation(
+  jwt: string,
+  installationId: number
+): Promise<Octokit> {
+  const octokit = createGitHubClient({ jwt });
+  
+  const response = await octokit.rest.apps.createInstallationAccessToken({
+    installation_id: installationId,
+  });
+  
+  const accessToken = response.data.token;
+  return createGitHubClient({ token: accessToken });
 }
 
 /**
