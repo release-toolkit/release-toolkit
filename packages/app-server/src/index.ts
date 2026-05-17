@@ -25,49 +25,40 @@ export default {
       const app = new App({
         appId: Number(env.GITHUB_APP_ID),
         privateKey: env.GITHUB_APP_PRIVATE_KEY,
-        // 必须声明 webhooks 选项，否则 verifyAndReceive 会报错
-        // secret 传空字符串临时禁用签名验证
-        webhooks: { secret: '' },
       });
+
+      // 手动解析 JSON，因为不使用 verifyAndReceive
+      const payload = JSON.parse(body);
 
       // opened + reopened：发欢迎评论
-      app.webhooks.on(['pull_request.opened', 'pull_request.reopened'] as any, async ({ octokit, payload }) => {
+      if (eventType === 'pull_request' && (payload.action === 'opened' || payload.action === 'reopened')) {
         console.log('PR opened/reopened, sending welcome comment');
-        const { owner, name: repo } = payload.repository;
-        await octokit.rest.issues.createComment({
-          owner: owner.login, repo, issue_number: payload.pull_request.number, body: WELCOME_MSG,
+        const { owner, repo } = payload.repository;
+        await app.octokit.rest.issues.createComment({
+          owner, repo, issue_number: payload.pull_request.number, body: WELCOME_MSG,
         });
-      });
+      }
 
       // merged：发合并评论
-      app.webhooks.on('pull_request.closed', async ({ octokit, payload }) => {
-        console.log('PR closed, checking merge status');
-        if (!payload.pull_request.merged) return;
-        const { owner, name: repo } = payload.repository;
-        await octokit.rest.issues.createComment({
-          owner: owner.login, repo, issue_number: payload.pull_request.number, body: MERGED_MSG,
+      if (eventType === 'pull_request' && payload.action === 'closed' && payload.pull_request.merged) {
+        console.log('PR merged, sending merged comment');
+        const { owner, repo } = payload.repository;
+        await app.octokit.rest.issues.createComment({
+          owner, repo, issue_number: payload.pull_request.number, body: MERGED_MSG,
         });
-      });
+      }
 
       // synchronize + ready_for_review：触发 workflow
-      app.webhooks.on(['pull_request.synchronize', 'pull_request.ready_for_review'] as any, async ({ octokit, payload }) => {
+      if (eventType === 'pull_request' && (payload.action === 'synchronize' || payload.action === 'ready_for_review')) {
         console.log('PR synchronized/ready_for_review, triggering workflow');
-        const { owner, name: repo } = payload.repository;
-        await octokit.rest.actions.createWorkflowDispatch({
-          owner: owner.login, repo,
+        const { owner, repo } = payload.repository;
+        await app.octokit.rest.actions.createWorkflowDispatch({
+          owner, repo,
           workflow_id: 'pr-log-collector.yml',
           ref: payload.pull_request.head.ref,
           inputs: { pr_number: String(payload.pull_request.number) },
         });
-      });
-
-      // 传入空签名，由于未设置 webhooks.secret，签名验证会被跳过
-      await app.webhooks.verifyAndReceive({
-        id: deliveryId,
-        name: eventType,
-        payload: body,
-        signature: '',
-      });
+      }
 
       console.log('Webhook processed successfully');
       return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
