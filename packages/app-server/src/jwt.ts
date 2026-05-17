@@ -13,8 +13,7 @@ export async function generateJWT(
 
   const payload = {
     iss: String(appId),
-    kid: String(now),
-    exp: now + 60, // 60 秒过期
+    exp: now + 600, // 10 分钟过期（GitHub 推荐）
   };
 
   const joseHeader = {

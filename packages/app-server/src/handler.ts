@@ -54,10 +54,11 @@ export async function handlePREvent(
     const body = await getPRBody(octokit, owner, repo, prNumber);
 
     // 触发 release-preview workflow
-    await triggerWorkflow(octokit, owner, repo, context.workflowId, base.ref, {
+    const targetRef = base?.ref || 'main';
+    await triggerWorkflow(octokit, owner, repo, context.workflowId, targetRef, {
       prNumber,
-      title,
-      body,
+      title: title || '',
+      body: body || null,
       mergedAt: new Date().toISOString(),
     });
 

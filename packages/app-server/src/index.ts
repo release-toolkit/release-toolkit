@@ -39,12 +39,13 @@ export default {
 
     // 验证签名
     const secret = env.GITHUB_WEBHOOK_SECRET || '';
-    if (!verifySignature(JSON.parse(body), signature, secret)) {
+    const parsedBody = JSON.parse(body);
+    if (!verifySignature(parsedBody, signature, secret)) {
       return new Response('Invalid signature', { status: 401 });
     }
 
     try {
-      const event = JSON.parse(body) as Parameters<typeof dispatchEvent>[0];
+      const event = parsedBody as Parameters<typeof dispatchEvent>[0];
 
       // 调试日志
       console.log('Received webhook event:', event.action);
