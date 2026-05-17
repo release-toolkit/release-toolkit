@@ -37,6 +37,8 @@ export async function handlePREvent(
   const { number: prNumber, merged, base } = pull_request;
   const { owner, repo } = context;
 
+  console.log('Handling PR event:', { prNumber, merged, action: event.action });
+
   // 创建 GitHub 客户端（使用安装的 token）
   const octokit = await createAuthenticatedClient(context);
 

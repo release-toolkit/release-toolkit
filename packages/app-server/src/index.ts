@@ -46,6 +46,9 @@ export default {
     try {
       const event = JSON.parse(body) as Parameters<typeof dispatchEvent>[0];
 
+      // 调试日志
+      console.log('Received webhook event:', event.name, event.action);
+
       // 构建处理上下文
       const context: HandlerContext = {
         appId: Number(env.GITHUB_APP_ID) || 0,
@@ -56,7 +59,11 @@ export default {
         repo: env.GITHUB_REPO || '',
       };
 
+      console.log('Context:', { appId: context.appId, owner: context.owner, repo: context.repo, workflowId: context.workflowId });
+
       await dispatchEvent(event, context);
+
+      console.log('Event dispatched successfully');
 
       return new Response(JSON.stringify({ success: true }), {
         status: 200,
