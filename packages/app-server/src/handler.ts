@@ -35,37 +35,43 @@ export async function handlePREvent(
   }
 
   const { number: prNumber, merged, base } = pull_request;
-
-  // 只处理合并的 PR
-  if (!merged) {
-    return;
-  }
-
   const { owner, repo } = context;
 
   // 创建 GitHub 客户端（使用安装的 token）
   const octokit = await createAuthenticatedClient(context);
 
-  // 获取 PR 信息
-  const title = await getPRTitle(octokit, owner, repo, prNumber);
-  const body = await getPRBody(octokit, owner, repo, prNumber);
+  if (merged) {
+    // 处理已合并的 PR：触发 release-preview workflow
+    // 获取 PR 信息
+    const title = await getPRTitle(octokit, owner, repo, prNumber);
+    const body = await getPRBody(octokit, owner, repo, prNumber);
 
-  // 触发 release-preview workflow
-  await triggerWorkflow(octokit, owner, repo, context.workflowId, base.ref, {
-    prNumber,
-    title,
-    body,
-    mergedAt: new Date().toISOString(),
-  });
+    // 触发 release-preview workflow
+    await triggerWorkflow(octokit, owner, repo, context.workflowId, base.ref, {
+      prNumber,
+      title,
+      body,
+      mergedAt: new Date().toISOString(),
+    });
 
-  // 添加评论确认
-  await commentOnPR(
-    octokit,
-    owner,
-    repo,
-    prNumber,
-    'Release preview workflow triggered successfully.'
-  );
+    // 添加评论确认
+    await commentOnPR(
+      octokit,
+      owner,
+      repo,
+      prNumber,
+      'Release preview workflow triggered successfully.'
+    );
+  } else {
+    // 处理未合并的 PR：发送欢迎评论
+    await commentOnPR(
+      octokit,
+      owner,
+      repo,
+      prNumber,
+      'Release Toolkit 已就绪 🎉\n\n感谢使用 release-toolkit，为你的 PR 提供自动化发布支持。'
+    );
+  }
 }
 
 /**
@@ -113,6 +119,8 @@ export async function dispatchEvent(
   const { action } = event;
 
   switch (action) {
+    case 'opened':
+    case 'reopened':
     case 'closed':
       await handlePREvent(event, context);
       break;
