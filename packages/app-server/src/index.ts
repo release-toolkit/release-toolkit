@@ -24,7 +24,7 @@ export default {
 
     // DEBUG: 手动计算签名对比
     const secret = env.GITHUB_WEBHOOK_SECRET;
-    const hmac = createHmac('sha256', secret);
+    const hmac = createHmac('sha256', Buffer.from(secret, 'utf8'));
     hmac.update(body);
     const expected = `sha256=${hmac.digest('hex')}`;
     console.error('DEBUG', {
