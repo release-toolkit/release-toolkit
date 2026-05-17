@@ -1,17 +1,9 @@
-import { createSign } from 'crypto';
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
-
-/**
- * 从文件加载私钥
- */
-export function loadPrivateKey(pemPath: string): string {
-  const absolutePath = resolve(pemPath);
-  return readFileSync(absolutePath, 'utf-8');
-}
+import { createSign } from 'node:crypto';
 
 /**
  * 生成 GitHub App JWT
+ * @param appId - GitHub App ID
+ * @param privateKeyPem - 私钥 PEM 内容（通过环境变量传入）
  */
 export async function generateJWT(
   appId: number,
