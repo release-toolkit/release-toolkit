@@ -51,11 +51,18 @@ export default {
     });
 
     try {
+      const body = await request.text();
+      const signature = request.headers.get('X-Hub-Signature-256') ?? request.headers.get('X-Hub-Signature') ?? '';
+      // DEBUG: 临时调试，确认后删除
+      console.log('DEBUG secret length:', env.GITHUB_WEBHOOK_SECRET.length, 'repr:', JSON.stringify(env.GITHUB_WEBHOOK_SECRET).slice(0, 10));
+      console.log('DEBUG body length:', body.length, 'signature:', signature.slice(0, 20));
+      console.log('DEBUG event:', request.headers.get('X-GitHub-Event'), 'delivery:', request.headers.get('X-GitHub-Delivery'));
+
       await app.webhooks.verifyAndReceive({
         id: request.headers.get('X-GitHub-Delivery') ?? '',
         name: request.headers.get('X-GitHub-Event') ?? '',
-        payload: await request.text(),
-        signature: request.headers.get('X-Hub-Signature-256') ?? request.headers.get('X-Hub-Signature') ?? '',
+        payload: body,
+        signature,
       });
       return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
     } catch (e) {
