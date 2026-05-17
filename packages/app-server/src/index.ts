@@ -30,8 +30,7 @@ export default {
     const app = new App({
       appId: Number(env.GITHUB_APP_ID),
       privateKey: env.GITHUB_APP_PRIVATE_KEY,
-      // 临时：不传 webhooks 配置，跳过签名验证
-      // webhooks: secret ? { secret } : undefined,
+      webhooks: undefined, // 临时禁用签名验证
     });
 
     // opened + reopened：发欢迎评论
