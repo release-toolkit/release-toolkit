@@ -11,31 +11,48 @@ import Webhooks from '@octokit/webhooks';
 // 配置
 // ============================================================================
 
-const webhooks = new Webhooks({
-  secret: process.env.GITHUB_WEBHOOK_SECRET || ''
-});
+// Cloudflare Workers 环境变量通过 env 参数传递
+interface Env {
+  GITHUB_APP_ID?: string;
+  GITHUB_WEBHOOK_SECRET?: string;
+  GITHUB_APP_PRIVATE_KEY?: string;
+}
 
-const octokit = new Octokit({
-  appId: Number(process.env.GITHUB_APP_ID),
-  privateKey: process.env.GITHUB_APP_PRIVATE_KEY || ''
-});
+// 使用 env 参数创建实例（在 fetch 中传入）
+function createWebhooks(env: Env) {
+  return new Webhooks({
+    secret: env.GITHUB_WEBHOOK_SECRET || ''
+  });
+}
+
+function createOctokit(env: Env) {
+  return new Octokit({
+    appId: Number(env.GITHUB_APP_ID),
+    privateKey: env.GITHUB_APP_PRIVATE_KEY || ''
+  });
+}
 
 // ============================================================================
 // 事件处理
 // ============================================================================
 
-async function handlePREvent(event: {
-  action: string;
-  pull_request: {
-    number: number;
-    merged?: boolean;
-    head?: { ref?: string };
-    base?: { repo?: { owner?: { login?: string }; name?: string } };
-  };
-  installation: { id: number };
-}): Promise<void> {
+async function handlePREvent(
+  event: {
+    action: string;
+    pull_request: {
+      number: number;
+      merged?: boolean;
+      head?: { ref?: string };
+      base?: { repo?: { owner?: { login?: string }; name?: string } };
+    };
+    installation: { id: number };
+  },
+  octokit: Octokit
+): Promise<void> {
   const pr = event.pull_request;
   const installationId = event.installation.id;
+
+  console.log(`Processing PR #${pr.number}, action: ${event.action}, installationId: ${installationId}`);
 
   // 获取 installation token
   await octokit.apps.createInstallationAccessToken({
@@ -49,6 +66,8 @@ async function handlePREvent(event: {
 
   const owner = repo.owner.login;
   const repoName = repo.name;
+
+  console.log(`Repository: ${owner}/${repoName}`);
 
   if (pr.merged) {
     // PR 已合并，评论提示
@@ -91,14 +110,10 @@ async function handlePREvent(event: {
 // 入口
 // ============================================================================
 
-interface Env {
-  GITHUB_APP_ID?: string;
-  GITHUB_WEBHOOK_SECRET?: string;
-  GITHUB_APP_PRIVATE_KEY?: string;
-}
-
 export default {
-  async fetch(request: Request, _env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    console.log('Received request');
+
     if (request.method !== 'POST') {
       return new Response('Method Not Allowed', { status: 405 });
     }
@@ -107,16 +122,27 @@ export default {
     const event = request.headers.get('X-GitHub-Event');
 
     if (!signature || !event) {
+      console.log('Missing headers:', { signature, event });
       return new Response('Missing headers', { status: 400 });
     }
 
     const rawBody = await request.arrayBuffer();
     const body = JSON.parse(new TextDecoder().decode(rawBody)) as Record<string, unknown>;
 
+    console.log('GitHub Event:', event);
+
+    // 创建实例（使用 env 参数）
+    const webhooks = createWebhooks(env);
+    const octokit = createOctokit(env);
+
     // 验证签名
     try {
+      console.log('Verifying signature...');
       await webhooks.verify(rawBody, signature);
-    } catch {
+      console.log('Signature verified');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('Signature verification failed:', msg);
       return new Response('Invalid signature', { status: 401 });
     }
 
@@ -125,6 +151,7 @@ export default {
       const payload = body as Record<string, unknown>;
 
       if (event === 'pull_request' && payload.pull_request) {
+        console.log('Handling PR event');
         await handlePREvent({
           action: payload.action as string,
           pull_request: payload.pull_request as {
@@ -134,7 +161,9 @@ export default {
             base?: { repo?: { owner?: { login?: string }; name?: string } };
           },
           installation: payload.installation as { id: number }
-        });
+        }, octokit);
+      } else {
+        console.log('Ignoring non-PR event or PR without installation');
       }
 
       return new Response(JSON.stringify({ success: true }), {
@@ -143,6 +172,7 @@ export default {
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      console.error('Error processing event:', msg);
       return new Response(JSON.stringify({ success: false, error: msg }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
