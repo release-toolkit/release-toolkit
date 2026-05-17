@@ -58,11 +58,12 @@ export default {
         });
       });
 
+      // 传入空签名，由于未设置 webhooks.secret，签名验证会被跳过
       await app.webhooks.verifyAndReceive({
         id: deliveryId,
         name: eventType,
         payload: body,
-        signature: '', // 传空字符串跳过签名验证
+        signature: '',
       });
 
       console.log('Webhook processed successfully');
