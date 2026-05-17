@@ -11,7 +11,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "octokit": "^4.0.0"
+    "octokit": "^5.0.4"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250501.0",
