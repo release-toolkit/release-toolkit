@@ -10,6 +10,10 @@
     "deploy": "wrangler deploy",
     "type-check": "tsc --noEmit"
   },
+  "dependencies": {
+    "@octokit/rest": "^21.0.0",
+    "@octokit/webhooks": "^6.0.0"
+  },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250501.0",
     "wrangler": "^3.0.0"
