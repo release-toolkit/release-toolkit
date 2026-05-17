@@ -21,7 +21,6 @@ export async function generateJWT(
     typ: 'JWT',
   };
 
-  // 使用 crypto.createSign 生成签名
   const base64Header = Buffer.from(JSON.stringify(joseHeader)).toString('base64url');
   const base64Payload = Buffer.from(JSON.stringify(payload)).toString('base64url');
 
@@ -30,31 +29,4 @@ export async function generateJWT(
   const signature = sign.sign(privateKeyPem, 'base64url');
 
   return `${base64Header}.${base64Payload}.${signature}`;
-}
-
-/**
- * 生成 GitHub App Installation Access Token
- */
-export async function generateInstallationToken(
-  jwt: string,
-  installationId: number
-): Promise<string> {
-  const response = await fetch(
-    `https://api.github.com/app/installations/${installationId}/access_tokens`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${jwt}`,
-        Accept: 'application/vnd.github.v3+json',
-        'Content-Type': 'application/json',
-      },
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to generate installation token: ${response.status}`);
-  }
-
-  const data = await response.json() as { token: string };
-  return data.token;
 }

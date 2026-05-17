@@ -7,11 +7,6 @@
 import { verifySignature } from './verify.ts';
 import { dispatchEvent } from './handler.ts';
 import type { HandlerContext } from './handler.ts';
-// 为将来集成准备，暂时禁用未使用警告
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { previewRelease } from '@release-toolkit/core';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { publishRelease } from '@release-toolkit/core';
 
 interface Env {
   GITHUB_APP_ID?: string;
