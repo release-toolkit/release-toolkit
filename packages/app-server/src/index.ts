@@ -27,33 +27,48 @@ export default {
         privateKey: env.GITHUB_APP_PRIVATE_KEY,
       });
 
-      // 手动解析 JSON，因为不使用 verifyAndReceive
+      // 手动解析 JSON
       const payload = JSON.parse(body);
+      const { owner, repo } = payload.repository;
+
+      // 从 installation payload 获取 installation_id（GitHub 会发送 installation.id）
+      const installationId = payload.installation?.id;
+      if (!installationId) {
+        console.error('No installation_id in payload');
+        return new Response(JSON.stringify({ success: false, error: 'No installation_id' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
+
+      // 获取 installation 对应的 octokit 实例
+      const octokit = await app.getInstallationOctokit(installationId);
 
       // opened + reopened：发欢迎评论
       if (eventType === 'pull_request' && (payload.action === 'opened' || payload.action === 'reopened')) {
         console.log('PR opened/reopened, sending welcome comment');
-        const { owner, repo } = payload.repository;
-        await app.octokit.rest.issues.createComment({
-          owner, repo, issue_number: payload.pull_request.number, body: WELCOME_MSG,
+        await octokit.rest.issues.createComment({
+          owner: owner.login,
+          repo,
+          issue_number: payload.pull_request.number,
+          body: WELCOME_MSG,
         });
       }
 
       // merged：发合并评论
       if (eventType === 'pull_request' && payload.action === 'closed' && payload.pull_request.merged) {
         console.log('PR merged, sending merged comment');
-        const { owner, repo } = payload.repository;
-        await app.octokit.rest.issues.createComment({
-          owner, repo, issue_number: payload.pull_request.number, body: MERGED_MSG,
+        await octokit.rest.issues.createComment({
+          owner: owner.login,
+          repo,
+          issue_number: payload.pull_request.number,
+          body: MERGED_MSG,
         });
       }
 
       // synchronize + ready_for_review：触发 workflow
       if (eventType === 'pull_request' && (payload.action === 'synchronize' || payload.action === 'ready_for_review')) {
         console.log('PR synchronized/ready_for_review, triggering workflow');
-        const { owner, repo } = payload.repository;
-        await app.octokit.rest.actions.createWorkflowDispatch({
-          owner, repo,
+        await octokit.rest.actions.createWorkflowDispatch({
+          owner: owner.login,
+          repo,
           workflow_id: 'pr-log-collector.yml',
           ref: payload.pull_request.head.ref,
           inputs: { pr_number: String(payload.pull_request.number) },
