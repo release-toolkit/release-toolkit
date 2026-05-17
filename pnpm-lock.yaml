@@ -45,12 +45,9 @@ importers:
 
   packages/app-server:
     dependencies:
-      '@octokit/rest':
-        specifier: ^21.0.0
-        version: 21.1.1
-      '@octokit/webhooks':
-        specifier: ^6.0.0
-        version: 6.3.2
+      octokit:
+        specifier: ^4.0.0
+        version: 4.1.4
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20250501.0
@@ -605,9 +602,6 @@ packages:
     resolution: {integrity: sha512-Ev7K8bkYrYLhoOSZGVAGsLEscZQyq7XQONCBBAl2JdMg7IT3PQn/y8P0KjloPoYpI5UylqYrLeUcScaYWXwDvw==}
     engines: {node: '>= 18'}
 
-  '@octokit/openapi-types@24.2.0':
-    resolution: {integrity: sha512-9sIH3nSUttelJSXUrmGzl7QUBFul0/mB8HRYl3fOlgHbIWG+WnYDXU3v/2zMtAvuzZ/ed00Ei6on975FhBfzrg==}
-
   '@octokit/openapi-types@25.1.0':
     resolution: {integrity: sha512-idsIggNXUKkk0+BExUn1dQ92sfysJrje03Q0bv0e+KPLrvyqZF8MnBpFz8UNfYDwB3Ie7Z0TByjWfzxt7vseaA==}
 
@@ -620,26 +614,8 @@ packages:
     peerDependencies:
       '@octokit/core': '>=6'
 
-  '@octokit/plugin-paginate-rest@11.6.0':
-    resolution: {integrity: sha512-n5KPteiF7pWKgBIBJSk8qzoZWcUkza2O6A0za97pMGVrGfPdltxrfmfF5GucHYvHGZD8BdaZmmHGz5cX/3gdpw==}
-    engines: {node: '>= 18'}
-    peerDependencies:
-      '@octokit/core': '>=6'
-
   '@octokit/plugin-paginate-rest@12.0.0':
     resolution: {integrity: sha512-MPd6WK1VtZ52lFrgZ0R2FlaoiWllzgqFHaSZxvp72NmoDeZ0m8GeJdg4oB6ctqMTYyrnDYp592Xma21mrgiyDA==}
-    engines: {node: '>= 18'}
-    peerDependencies:
-      '@octokit/core': '>=6'
-
-  '@octokit/plugin-request-log@5.3.1':
-    resolution: {integrity: sha512-n/lNeCtq+9ofhC15xzmJCNKP2BWTv8Ih2TTy+jatNCCq/gQP/V7rK3fjIfuz0pDWDALO/o/4QY4hyOF6TQQFUw==}
-    engines: {node: '>= 18'}
-    peerDependencies:
-      '@octokit/core': '>=6'
-
-  '@octokit/plugin-rest-endpoint-methods@13.5.0':
-    resolution: {integrity: sha512-9Pas60Iv9ejO3WlAX3maE1+38c5nqbJXV5GrncEfkndIpZrJ/WPMRd2xYDcPPEt5yzpxcjw9fWNoPhsSGzqKqw==}
     engines: {node: '>= 18'}
     peerDependencies:
       '@octokit/core': '>=6'
@@ -670,13 +646,6 @@ packages:
     resolution: {integrity: sha512-q8ybdytBmxa6KogWlNa818r0k1wlqzNC+yNkcQDECHvQo8Vmstrg18JwqJHdJdUiHD2sjlwBgSm9kHkOKe2iyA==}
     engines: {node: '>= 18'}
 
-  '@octokit/rest@21.1.1':
-    resolution: {integrity: sha512-sTQV7va0IUVZcntzy1q3QqPm/r8rWtDCqpRAmb8eXXnKkjoQEtFe3Nt5GTVsHft+R6jJoHeSiVLcgcvhtue/rg==}
-    engines: {node: '>= 18'}
-
-  '@octokit/types@13.10.0':
-    resolution: {integrity: sha512-ifLaO34EbbPj0Xgro4G5lP5asESjwHracYJvVaPIyXMuiuXLlhic3S47cBdTb+jfODkTE5YtGCLt3Ay3+J97sA==}
-
   '@octokit/types@14.1.0':
     resolution: {integrity: sha512-1y6DgTy8Jomcpu33N+p5w58l6xyt55Ar2I91RPiIA0xCJBXyUAhXCcmZaDWSANiha7R9a6qJJ2CRomGPZ6f46g==}
 
@@ -687,9 +656,6 @@ packages:
   '@octokit/webhooks@13.9.1':
     resolution: {integrity: sha512-Nss2b4Jyn4wB3EAqAPJypGuCJFalz/ZujKBQQ5934To7Xw9xjf4hkr/EAByxQY7hp7MKd790bWGz7XYSTsHmaw==}
     engines: {node: '>= 18'}
-
-  '@octokit/webhooks@6.3.2':
-    resolution: {integrity: sha512-qirhkNoOWwQF0IHZ+9nobfcM/LMRhsJ2FUrexzzJZIDTXLAGZLVpUnXUZ86hSlYfCluyTccIFOz+SFFzodft0g==}
 
   '@oxc-project/types@0.127.0':
     resolution: {integrity: sha512-aIYXQBo4lCbO4z0R3FHeucQHpF46l2LbMdxRvqvuRuW2OxdnSkcng5B8+K12spgLDj93rtN3+J2Vac/TIO+ciQ==}
@@ -2166,7 +2132,6 @@ snapshots:
       '@octokit/plugin-paginate-rest': 12.0.0(@octokit/core@6.1.6)
       '@octokit/types': 14.1.0
       '@octokit/webhooks': 13.9.1
-    optional: true
 
   '@octokit/auth-app@7.2.2':
     dependencies:
@@ -2178,7 +2143,6 @@ snapshots:
       toad-cache: 3.7.0
       universal-github-app-jwt: 2.2.2
       universal-user-agent: 7.0.3
-    optional: true
 
   '@octokit/auth-oauth-app@8.1.4':
     dependencies:
@@ -2187,7 +2151,6 @@ snapshots:
       '@octokit/request': 9.2.4
       '@octokit/types': 14.1.0
       universal-user-agent: 7.0.3
-    optional: true
 
   '@octokit/auth-oauth-device@7.1.5':
     dependencies:
@@ -2195,7 +2158,6 @@ snapshots:
       '@octokit/request': 9.2.4
       '@octokit/types': 14.1.0
       universal-user-agent: 7.0.3
-    optional: true
 
   '@octokit/auth-oauth-user@5.1.6':
     dependencies:
@@ -2204,7 +2166,6 @@ snapshots:
       '@octokit/request': 9.2.4
       '@octokit/types': 14.1.0
       universal-user-agent: 7.0.3
-    optional: true
 
   '@octokit/auth-token@5.1.2': {}
 
@@ -2212,7 +2173,6 @@ snapshots:
     dependencies:
       '@octokit/request-error': 6.1.8
       '@octokit/types': 14.1.0
-    optional: true
 
   '@octokit/core@6.1.6':
     dependencies:
@@ -2245,10 +2205,8 @@ snapshots:
       '@octokit/oauth-methods': 5.1.5
       '@types/aws-lambda': 8.10.161
       universal-user-agent: 7.0.3
-    optional: true
 
-  '@octokit/oauth-authorization-url@7.1.1':
-    optional: true
+  '@octokit/oauth-authorization-url@7.1.1': {}
 
   '@octokit/oauth-methods@5.1.5':
     dependencies:
@@ -2256,45 +2214,24 @@ snapshots:
       '@octokit/request': 9.2.4
       '@octokit/request-error': 6.1.8
       '@octokit/types': 14.1.0
-    optional: true
-
-  '@octokit/openapi-types@24.2.0': {}
 
   '@octokit/openapi-types@25.1.0': {}
 
-  '@octokit/openapi-webhooks-types@11.0.0':
-    optional: true
+  '@octokit/openapi-webhooks-types@11.0.0': {}
 
   '@octokit/plugin-paginate-graphql@5.2.4(@octokit/core@6.1.6)':
     dependencies:
       '@octokit/core': 6.1.6
-    optional: true
-
-  '@octokit/plugin-paginate-rest@11.6.0(@octokit/core@6.1.6)':
-    dependencies:
-      '@octokit/core': 6.1.6
-      '@octokit/types': 13.10.0
 
   '@octokit/plugin-paginate-rest@12.0.0(@octokit/core@6.1.6)':
     dependencies:
       '@octokit/core': 6.1.6
       '@octokit/types': 14.1.0
-    optional: true
-
-  '@octokit/plugin-request-log@5.3.1(@octokit/core@6.1.6)':
-    dependencies:
-      '@octokit/core': 6.1.6
-
-  '@octokit/plugin-rest-endpoint-methods@13.5.0(@octokit/core@6.1.6)':
-    dependencies:
-      '@octokit/core': 6.1.6
-      '@octokit/types': 13.10.0
 
   '@octokit/plugin-rest-endpoint-methods@14.0.0(@octokit/core@6.1.6)':
     dependencies:
       '@octokit/core': 6.1.6
       '@octokit/types': 14.1.0
-    optional: true
 
   '@octokit/plugin-retry@7.2.1(@octokit/core@6.1.6)':
     dependencies:
@@ -2302,14 +2239,12 @@ snapshots:
       '@octokit/request-error': 6.1.8
       '@octokit/types': 14.1.0
       bottleneck: 2.19.5
-    optional: true
 
   '@octokit/plugin-throttling@10.0.0(@octokit/core@6.1.6)':
     dependencies:
       '@octokit/core': 6.1.6
       '@octokit/types': 14.1.0
       bottleneck: 2.19.5
-    optional: true
 
   '@octokit/request-error@6.1.8':
     dependencies:
@@ -2323,36 +2258,17 @@ snapshots:
       fast-content-type-parse: 2.0.1
       universal-user-agent: 7.0.3
 
-  '@octokit/rest@21.1.1':
-    dependencies:
-      '@octokit/core': 6.1.6
-      '@octokit/plugin-paginate-rest': 11.6.0(@octokit/core@6.1.6)
-      '@octokit/plugin-request-log': 5.3.1(@octokit/core@6.1.6)
-      '@octokit/plugin-rest-endpoint-methods': 13.5.0(@octokit/core@6.1.6)
-
-  '@octokit/types@13.10.0':
-    dependencies:
-      '@octokit/openapi-types': 24.2.0
-
   '@octokit/types@14.1.0':
     dependencies:
       '@octokit/openapi-types': 25.1.0
 
-  '@octokit/webhooks-methods@5.1.1':
-    optional: true
+  '@octokit/webhooks-methods@5.1.1': {}
 
   '@octokit/webhooks@13.9.1':
     dependencies:
       '@octokit/openapi-webhooks-types': 11.0.0
       '@octokit/request-error': 6.1.8
       '@octokit/webhooks-methods': 5.1.1
-    optional: true
-
-  '@octokit/webhooks@6.3.2':
-    dependencies:
-      debug: 4.4.3
-    transitivePeerDependencies:
-      - supports-color
 
   '@oxc-project/types@0.127.0': {}
 
@@ -2424,8 +2340,7 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
-  '@types/aws-lambda@8.10.161':
-    optional: true
+  '@types/aws-lambda@8.10.161': {}
 
   '@types/chai@5.2.3':
     dependencies:
@@ -2627,8 +2542,7 @@ snapshots:
 
   blake3-wasm@2.1.5: {}
 
-  bottleneck@2.19.5:
-    optional: true
+  bottleneck@2.19.5: {}
 
   brace-expansion@1.1.14:
     dependencies:
@@ -3029,7 +2943,6 @@ snapshots:
       '@octokit/request-error': 6.1.8
       '@octokit/types': 14.1.0
       '@octokit/webhooks': 13.9.1
-    optional: true
 
   ohash@2.0.11: {}
 
@@ -3225,8 +3138,7 @@ snapshots:
 
   tinyrainbow@3.1.0: {}
 
-  toad-cache@3.7.0:
-    optional: true
+  toad-cache@3.7.0: {}
 
   tree-kill@1.2.2: {}
 
@@ -3304,8 +3216,7 @@ snapshots:
       pathe: 2.0.3
       ufo: 1.6.4
 
-  universal-github-app-jwt@2.2.2:
-    optional: true
+  universal-github-app-jwt@2.2.2: {}
 
   universal-user-agent@7.0.3: {}
 
