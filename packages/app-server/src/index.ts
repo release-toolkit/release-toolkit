@@ -54,9 +54,14 @@ export default {
       const body = await request.text();
       const signature = request.headers.get('X-Hub-Signature-256') ?? request.headers.get('X-Hub-Signature') ?? '';
       // DEBUG: 临时调试，确认后删除
-      console.log('DEBUG secret length:', env.GITHUB_WEBHOOK_SECRET.length, 'repr:', JSON.stringify(env.GITHUB_WEBHOOK_SECRET).slice(0, 10));
-      console.log('DEBUG body length:', body.length, 'signature:', signature.slice(0, 20));
-      console.log('DEBUG event:', request.headers.get('X-GitHub-Event'), 'delivery:', request.headers.get('X-GitHub-Delivery'));
+      console.error('DEBUG', {
+        secret_len: env.GITHUB_WEBHOOK_SECRET.length,
+        secret_repr: JSON.stringify(env.GITHUB_WEBHOOK_SECRET),
+        body_len: body.length,
+        signature,
+        event: request.headers.get('X-GitHub-Event'),
+        delivery: request.headers.get('X-GitHub-Delivery'),
+      });
 
       await app.webhooks.verifyAndReceive({
         id: request.headers.get('X-GitHub-Delivery') ?? '',
