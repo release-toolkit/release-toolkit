@@ -9,9 +9,9 @@ import { dispatchEvent } from './handler.js';
 import type { HandlerContext } from './handler.js';
 // 为将来集成准备，暂时禁用未使用警告
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { previewRelease } from '../../core/src/features/release-preview/previewer.js';
+import { previewRelease } from '@release-toolkit/core';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { publishRelease } from '../../core/src/features/release-publisher/publisher.js';
+import { publishRelease } from '@release-toolkit/core';
 
 interface Env {
   GITHUB_APP_ID?: string;
