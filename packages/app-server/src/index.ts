@@ -17,7 +17,6 @@ interface Env {
   GITHUB_APP_ID?: string;
   GITHUB_WEBHOOK_SECRET?: string;
   GITHUB_APP_PRIVATE_KEY?: string;
-  GITHUB_WORKFLOW_ID?: string;
   GITHUB_OWNER?: string;
   GITHUB_REPO?: string;
 }
@@ -55,12 +54,11 @@ export default {
         appId: Number(env.GITHUB_APP_ID) || 0,
         privateKeyPem: env.GITHUB_APP_PRIVATE_KEY || '',
         secret,
-        workflowId: env.GITHUB_WORKFLOW_ID || '',
         owner: env.GITHUB_OWNER || '',
         repo: env.GITHUB_REPO || '',
       };
 
-      console.log('Context:', { appId: context.appId, owner: context.owner, repo: context.repo, workflowId: context.workflowId });
+      console.log('Context:', { appId: context.appId, owner: context.owner, repo: context.repo });
 
       await dispatchEvent(event, context);
 

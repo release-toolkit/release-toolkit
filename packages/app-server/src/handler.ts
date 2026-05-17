@@ -3,9 +3,6 @@ import { generateJWT } from './jwt.ts';
 import {
   createAuthenticatedClientWithInstallation,
   commentOnPR,
-  triggerWorkflow,
-  getPRTitle,
-  getPRBody,
 } from './github.ts';
 import type { Octokit } from 'octokit';
 
@@ -16,7 +13,6 @@ export interface HandlerContext {
   appId: number;
   privateKeyPem: string;
   secret: string;
-  workflowId: string;
   owner: string;
   repo: string;
 }
@@ -34,7 +30,7 @@ export async function handlePREvent(
     throw new Error('Missing pull_request in event');
   }
 
-  const { number: prNumber, merged, base } = pull_request;
+  const { number: prNumber, merged } = pull_request;
   const { owner, repo } = context;
   const installationId = installation?.id;
 
@@ -48,32 +44,18 @@ export async function handlePREvent(
   const octokit = await createAuthenticatedClient(context, installationId);
 
   if (merged) {
-    // 处理已合并的 PR：触发 release-preview workflow
-    // 获取 PR 信息
-    const title = await getPRTitle(octokit, owner, repo, prNumber);
-    const body = await getPRBody(octokit, owner, repo, prNumber);
-
-    // 触发 release-preview workflow
-    const targetRef = base?.ref || 'main';
-    await triggerWorkflow(octokit, owner, repo, context.workflowId, targetRef, {
-      prNumber,
-      title: title || '',
-      body: body || null,
-      mergedAt: new Date().toISOString(),
-    });
-
-    // 添加评论确认
+    // 处理已合并的 PR：发送合并确认评论
     await commentOnPR(
       octokit,
       owner,
       repo,
       prNumber,
-      'Release preview workflow triggered successfully.'
+      'PR 已合并，Release Toolkit 正在准备发布预览...'
     );
   } else {
     // 处理未合并的 PR：发送欢迎评论
     await commentOnPR(
-      octokit,
+      octikit,
       owner,
       repo,
       prNumber,
