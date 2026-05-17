@@ -10,4 +10,6 @@ export default defineConfig({
   dts: true,
   sourcemap: false,
   clean: true,
+  // app-server 特殊配置：输出为单文件，无外部依赖
+  // 注意：app-server 使用 Cloudflare Workers，不需要 tsdown 打包
 });

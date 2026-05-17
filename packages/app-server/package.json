@@ -10,14 +10,8 @@
     "deploy": "wrangler deploy",
     "type-check": "tsc --noEmit"
   },
-  "dependencies": {
-    "@release-toolkit/core": "workspace:*",
-    "jose": "^4.14.4",
-    "octokit": "^4.1.4"
-  },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250501.0",
-    "@types/node": "^22.0.0",
     "wrangler": "^3.0.0"
   }
 }
