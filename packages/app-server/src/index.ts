@@ -39,6 +39,13 @@ export default {
       body_preview: body.substring(0, 100),
     });
 
+    // 手动验证签名
+    const isValid = expected === signature;
+    if (!isValid) {
+      console.error('Signature mismatch! expected:', expected, 'received:', signature);
+      return new Response(JSON.stringify({ success: false, error: 'signature mismatch' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+    }
+
     const app = new App({
       appId: Number(env.GITHUB_APP_ID),
       privateKey: env.GITHUB_APP_PRIVATE_KEY,
