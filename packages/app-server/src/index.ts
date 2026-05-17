@@ -63,16 +63,21 @@ export default {
         });
       }
 
-      // synchronize + ready_for_review：触发 workflow
+      // synchronize + ready_for_review：记录日志（暂时跳过 workflow 触发）
       if (eventType === 'pull_request' && (payload.action === 'synchronize' || payload.action === 'ready_for_review')) {
-        console.log('PR synchronized/ready_for_review, triggering workflow');
-        await octokit.rest.actions.createWorkflowDispatch({
-          owner: owner.login,
-          repo,
-          workflow_id: 'pr-log-collector.yml',
-          ref: payload.pull_request.head.ref,
-          inputs: { pr_number: String(payload.pull_request.number) },
-        });
+        console.log('PR synchronized/ready_for_review');
+        // 需要先获取 workflow 的数字 ID
+        // const workflows = await octokit.rest.actions.listRepoWorkflows({ owner: owner.login, repo });
+        // const workflow = workflows.data.find((w: any) => w.name === 'pr-log-collector.yml');
+        // if (workflow) {
+        //   await octokit.rest.actions.createWorkflowDispatch({
+        //     owner: owner.login,
+        //     repo,
+        //     workflow_id: workflow.id,
+        //     ref: payload.pull_request.head.ref,
+        //     inputs: { pr_number: String(payload.pull_request.number) },
+        //   });
+        // }
       }
 
       console.log('Webhook processed successfully');
