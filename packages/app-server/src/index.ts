@@ -33,6 +33,10 @@ export default {
       match: expected === signature,
       body_len: body.length,
       event: eventType,
+      deliveryId: deliveryId,
+      secret_len: secret.length,
+      signature_raw: signature,
+      body_preview: body.substring(0, 100),
     });
 
     const app = new App({
