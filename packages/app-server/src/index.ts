@@ -25,6 +25,9 @@ export default {
       const app = new App({
         appId: Number(env.GITHUB_APP_ID),
         privateKey: env.GITHUB_APP_PRIVATE_KEY,
+        // 必须声明 webhooks 选项，否则 verifyAndReceive 会报错
+        // secret 传空字符串临时禁用签名验证
+        webhooks: { secret: '' },
       });
 
       // opened + reopened：发欢迎评论
