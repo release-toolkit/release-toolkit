@@ -11,7 +11,6 @@ export default [
   ...tseslint.configs.recommended,
   prettier,
   {
-    files: ['packages/*/src/**/*.ts'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',

@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { publishRelease } from '../features/release-publisher/publisher.js';
-import { detectVersionChanges } from '../features/release-preview/version-detector.js';
+import { detectVersionChanges } from '../shared/version.js';
 import { createTagsForDiffs } from '../features/release-publisher/tag-manager.js';
 import { createGithubRelease } from '../features/release-publisher/github-release.js';
 
 // Mock all dependencies
 vi.mock('../shared/config/index.js', () => ({
   loadConfig: vi.fn(() => ({
-    productionBranch: 'main',
+    branches: { production: 'main' },
     releasePublisher: { createGithubRelease: true },
   })),
 }));
@@ -18,7 +18,7 @@ vi.mock('../features/release-preview/workspace-scanner.js', () => ({
   })),
 }));
 
-vi.mock('../features/release-preview/version-detector.js', () => ({
+vi.mock('../shared/version.js', () => ({
   detectVersionChanges: vi.fn(),
   compareVersions: vi.fn(),
   resolvePackageDirs: vi.fn(),
@@ -54,10 +54,12 @@ describe('publishRelease', () => {
   it('should create releases for version changes', async () => {
     vi.mocked(detectVersionChanges).mockResolvedValue([
       {
-        packageName: 'test-package',
-        packageDir: '/project/packages/test-package',
-        oldVersion: '1.0.0',
-        newVersion: '1.1.0',
+        package: {
+          packageName: 'test-package',
+          packagePath: '/project/packages/test-package',
+          currentVersion: '1.0.0',
+          newVersion: '1.1.0',
+        },
         diffType: 'minor',
       },
     ]);
@@ -71,10 +73,12 @@ describe('publishRelease', () => {
   it('should skip git tags creation in dryRun mode', async () => {
     vi.mocked(detectVersionChanges).mockResolvedValue([
       {
-        packageName: 'test-package',
-        packageDir: '/project/packages/test-package',
-        oldVersion: '1.0.0',
-        newVersion: '1.1.0',
+        package: {
+          packageName: 'test-package',
+          packagePath: '/project/packages/test-package',
+          currentVersion: '1.0.0',
+          newVersion: '1.1.0',
+        },
         diffType: 'minor',
       },
     ]);
@@ -96,10 +100,12 @@ describe('publishRelease', () => {
   it('should use options.owner and options.repo when provided', async () => {
     vi.mocked(detectVersionChanges).mockResolvedValue([
       {
-        packageName: 'test-package',
-        packageDir: '/project/packages/test-package',
-        oldVersion: '1.0.0',
-        newVersion: '1.1.0',
+        package: {
+          packageName: 'test-package',
+          packagePath: '/project/packages/test-package',
+          currentVersion: '1.0.0',
+          newVersion: '1.1.0',
+        },
         diffType: 'minor',
       },
     ]);

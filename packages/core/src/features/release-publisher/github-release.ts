@@ -1,4 +1,4 @@
-import { getOctokit } from '../../shared/github/api-client.js';
+import { createOctokit } from '../../shared/github/api-client.js';
 import type { ReleaseHookContext } from './types.js';
 
 export async function createGithubRelease(
@@ -8,7 +8,7 @@ export async function createGithubRelease(
   token?: string,
 ): Promise<string | null> {
   try {
-    const octokit = await getOctokit(token);
+    const octokit = await createOctokit(token);
     const { data } = await octokit.rest.repos.createRelease({
       owner: repoOwner,
       repo: repoName,

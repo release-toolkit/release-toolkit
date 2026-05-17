@@ -8,9 +8,16 @@ interface PRSnapshot {
   savedAt: string;
 }
 
-export function aggregateLogs(cwd?: string): string {
+const SNAPSHOT_DIR = '.release-toolkit/changelog/prs';
+
+/**
+ * 聚合 PR 日志快照
+ * @param cwd 工作目录
+ * @returns 格式化的聚合日志字符串
+ */
+export function aggregateReleaseLogs(cwd?: string): string {
   const basePath = cwd || process.cwd();
-  const snapshotDir = resolve(basePath, '.release-toolkit', 'changelog', 'prs');
+  const snapshotDir = resolve(basePath, SNAPSHOT_DIR);
 
   if (!existsSync(snapshotDir)) {
     return '*暂无 PR 日志快照，请在开发分支 PR 中填写 RELEASE-LOG 标记区。*';
@@ -30,6 +37,10 @@ export function aggregateLogs(cwd?: string): string {
 
   snapshots.sort((a, b) => a.prNumber - b.prNumber);
 
+  if (snapshots.length === 0) {
+    return '*暂无有效 PR 日志。*';
+  }
+
   const lines: string[] = [];
   for (const snap of snapshots) {
     lines.push(`### PR #${snap.prNumber}: ${snap.title}`);
@@ -40,5 +51,5 @@ export function aggregateLogs(cwd?: string): string {
     lines.push('');
   }
 
-  return lines.join('\n') || '*暂无有效 PR 日志。*';
+  return lines.join('\n');
 }

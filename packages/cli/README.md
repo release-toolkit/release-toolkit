@@ -1,32 +1,40 @@
 # @release-toolkit/cli
 
-命令行工具，快速接入 CI 环境进行版本检测和 changelog 生成。
+CLI 入口，提供 `release` 命令调用核心功能。
 
 ## 使用
 
 ```bash
-# 直接运行（无需安装）
-npx @release-toolkit/cli ci --base-ref origin/main
-
-# 检测版本变化并生成 changelog
-npx @release-toolkit/cli ci --base-ref origin/main --repo-url https://github.com/org/repo
-
-# 输出到文件
-npx @release-toolkit/cli ci --base-ref origin/main --output ./CHANGELOG.md
+release --help
 ```
 
 ## 命令
 
-### `release ci`
+| 命令 | 说明 |
+|------|------|
+| `release preview` | 执行发布预览（检测版本变更 + 聚合日志） |
+| `release publish` | 执行发布（创建 Tags + GitHub Release + 钩子） |
 
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `--base-ref` | 基准分支 | `origin/main` |
-| `--repo-url` | GitHub 仓库地址 | - |
-| `--output` | changelog 输出路径 | 控制台输出 |
-| `--plugins` | 启用的插件 | 内置插件 |
+## 发布流程钩子
 
-## 依赖
+publish 命令按以下顺序执行：
 
-- `@release-toolkit/core` - 核心功能
-- `@release-toolkit/changelog-presets` - 内置格式化插件
+1. **beforePublish** - 插件钩子
+2. **beforeTag** - 配置的钩子（创建 tag 前）
+3. **createTags** - 创建 Git Tags
+4. **createRelease** - 创建 GitHub Release
+5. **afterRelease** - 配置的钩子（发布后）
+6. **afterPublish** - 插件钩子
+
+## 示例
+
+```bash
+# GitHub Actions 中使用
+- name: Release Preview
+  run: |
+    pnpm dlx @release-toolkit/cli preview
+
+- name: Release Publisher
+  run: |
+    pnpm dlx @release-toolkit/cli publish
+```

@@ -6,14 +6,12 @@ describe('Version Utils', () => {
   describe('loadConfig', () => {
     it('should load default config when no config file exists', async () => {
       const config = await loadConfig('/tmp/non-existent-path');
-      expect(config).toHaveProperty('devBranch');
-      expect(config).toHaveProperty('productionBranch');
+      expect(config).toHaveProperty('branches');
     });
 
     it('should have correct default values', async () => {
       const config = await loadConfig('/tmp/non-existent-path');
-      expect(config.devBranch).toBe('dev');
-      expect(config.productionBranch).toBe('main');
+      expect(config.branches).toEqual({ dev: 'dev', production: 'main' });
     });
   });
 

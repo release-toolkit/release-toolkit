@@ -4,6 +4,12 @@ export type {
   PackageVersionInfo,
   VersionDiffResult,
   GithubContext,
+  ChangelogEntry,
+  IPlugin,
+  ILogParser,
+  ILineFormatter,
+  ILogFormatter,
+  ChangelogFormatter,
 } from './shared/types.js';
 
 // Shared: config
@@ -13,15 +19,24 @@ export {
   CONFIG_FILE,
   DEFAULT_CONFIG,
 } from './shared/config/index.js';
-export type { ReleaseToolkitConfig } from './shared/config/index.js';
+export type {
+  ReleaseToolkitConfig,
+  BranchesConfig,
+  PRLogCollectorConfig,
+  ReleasePreviewConfig,
+  ReleasePublisherConfig,
+  AfterReleaseHook,
+  GitTagsConfig,
+} from './shared/config/index.js';
 
 // Shared: github
 export {
-  getOctokit,
+  createOctokit,
   getPR,
   getPRComments,
   createPRComment,
   updatePRComment,
+  updatePR,
 } from './shared/github/api-client.js';
 export { postOrUpdateComment } from './shared/github/pr-commenter.js';
 export type { PRCommenterOptions } from './shared/github/pr-commenter.js';
@@ -35,6 +50,16 @@ export {
   createTag,
   pushTags,
 } from './shared/git/git-reader.js';
+
+// Shared: plugins
+export {
+  loadPlugins,
+  loadPluginsAsIPlugin,
+  loadLogParser,
+  applyFormatters,
+  applyFormatLine,
+  parseChangelog,
+} from './shared/plugins/index.js';
 
 // Features: prLogCollector
 export { collectPRLog } from './features/pr-log-collector/index.js';

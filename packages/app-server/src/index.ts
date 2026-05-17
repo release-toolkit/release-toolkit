@@ -1,34 +1,29 @@
 /**
  * release-toolkit GitHub App - Cloudflare Worker
  *
- * 最小实现：接收 GitHub Webhook 事件，调用 @release-toolkit/core 功能
+ * 接收 GitHub Webhook 事件，调用 @release-toolkit/core 功能
  */
 
+import { verifySignature } from './verify.js';
+import { dispatchEvent } from './handler.js';
+import type { HandlerContext } from './handler.js';
+// 为将来集成准备，暂时禁用未使用警告
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { previewRelease } from '../../core/src/features/release-preview/previewer.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { publishRelease } from '../../core/src/features/release-publisher/publisher.js';
 
-
-interface WebhookEvent {
-  action?: string;
-  pull_request?: {
-    number: number;
-    title: string;
-    body: string | null;
-    base: { ref: string; repo: { owner: { login: string }; name: string } };
-    head: { ref: string };
-  };
-  installation?: {
-    id: number;
-  };
+interface Env {
+  GITHUB_APP_ID?: string;
+  GITHUB_WEBHOOK_SECRET?: string;
+  GITHUB_APP_PRIVATE_KEY?: string;
+  GITHUB_WORKFLOW_ID?: string;
+  GITHUB_OWNER?: string;
+  GITHUB_REPO?: string;
 }
 
 export default {
-  async fetch(request: Request, env: Record<string, string | undefined>): Promise<Response> {
-    console.log('[DEBUG] Received request, method:', request.method);
-    console.log('[DEBUG] Available env keys:', Object.keys(env));
-    console.log('[DEBUG] GITHUB_APP_ID:', env.GITHUB_APP_ID);
-    console.log('[DEBUG] GITHUB_WEBHOOK_SECRET exists:', !!env.GITHUB_WEBHOOK_SECRET);
-    console.log('[DEBUG] GITHUB_APP_PRIVATE_KEY exists:', !!env.GITHUB_APP_PRIVATE_KEY);
-    console.log('[DEBUG] GITHUB_APP_PRIVATE_KEY length:', env.GITHUB_APP_PRIVATE_KEY?.length);
-
+  async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method !== 'POST') {
       return new Response('Method Not Allowed', { status: 405 });
     }
@@ -44,274 +39,35 @@ export default {
 
     // 验证签名
     const secret = env.GITHUB_WEBHOOK_SECRET || '';
-    console.log('Secret length:', secret.length);
-    const isValid = await verifySignature(body, signature, secret);
-    console.log('Signature valid:', isValid);
-    if (!isValid) {
+    if (!verifySignature(JSON.parse(body), signature, secret)) {
       return new Response('Invalid signature', { status: 401 });
     }
 
-    const event: WebhookEvent = JSON.parse(body);
-
     try {
-      const result = await handleEvent(eventType, event, env as Record<string, string>);
-      return new Response(JSON.stringify(result), {
+      const event = JSON.parse(body) as Parameters<typeof dispatchEvent>[0];
+
+      // 构建处理上下文
+      const context: HandlerContext = {
+        appId: Number(env.GITHUB_APP_ID) || 0,
+        privateKeyPem: env.GITHUB_APP_PRIVATE_KEY || '',
+        secret,
+        workflowId: env.GITHUB_WORKFLOW_ID || '',
+        owner: env.GITHUB_OWNER || '',
+        repo: env.GITHUB_REPO || '',
+      };
+
+      await dispatchEvent(event, context);
+
+      return new Response(JSON.stringify({ success: true }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
     } catch (error) {
-      console.error('Error:', error);
-      return new Response(JSON.stringify({ error: String(error) }), {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return new Response(JSON.stringify({ success: false, error: errorMessage }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
       });
     }
   },
 };
-
-async function verifySignature(
-  payload: string,
-  signature: string,
-  secret: string,
-): Promise<boolean> {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const sigBytes = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
-  const expected = 'sha256=' + hex(sigBytes);
-  return safeEqual(expected, signature);
-}
-
-function hex(bytes: ArrayBuffer): string {
-  return Array.from(new Uint8Array(bytes))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-async function safeEqual(a: string, b: string): Promise<boolean> {
-  if (a.length !== b.length) return false;
-  const aBytes = new TextEncoder().encode(a);
-  const bBytes = new TextEncoder().encode(b);
-  return crypto.subtle.timingSafeEqual(aBytes, bBytes);
-}
-
-async function handleEvent(
-  eventType: string,
-  event: WebhookEvent,
-  env: Record<string, string>,
-): Promise<Record<string, unknown>> {
-  console.log('Handling event:', eventType, 'action:', event.action);
-
-  // pull_request 事件
-  if (eventType === 'pull_request') {
-    const pr = event.pull_request;
-    if (!pr || !event.installation) {
-      return { success: false, message: 'Missing PR or installation data' };
-    }
-
-    console.log('PR number:', pr.number, 'action:', event.action);
-
-    // 第一次创建 PR 或 reopen：评论提醒批准后才自动生成
-    if (event.action === 'opened' || event.action === 'reopen') {
-      console.log('PR opened/reopened, commenting...');
-      const token = await getInstallationToken(event.installation.id, env);
-      await commentOnPR(token, pr.number, pr.base.repo.owner.login, pr.base.repo.name);
-      return { success: true, message: `PR #${pr.number} - reminded user to approve` };
-    }
-
-    // PR 更新（synchronize/edited/ready_for_review）：触发 collect
-    const supported = ['synchronize', 'edited', 'ready_for_review'];
-    if (!supported.includes(event.action ?? '')) {
-      return { success: true, message: `Skipped action: ${event.action}` };
-    }
-
-    console.log('PR updated, triggering workflow...');
-    const token = await getInstallationToken(event.installation.id, env);
-    await triggerWorkflow(
-      token,
-      pr.base.repo.owner.login,
-      pr.base.repo.name,
-      'pr-log-collector.yml',
-      { pr_number: pr.number },
-      pr.base.ref,
-    );
-
-    return {
-      success: true,
-      message: `PR #${pr.number} - triggered collect workflow`,
-    };
-  }
-
-
-  return { success: true, message: `Unhandled event: ${eventType}` };
-}
-
-/** 在 PR 创建时评论提醒用户批准 */
-async function commentOnPR(
-  token: string,
-  prNumber: number,
-  owner: string,
-  repo: string,
-): Promise<void> {
-  const commentBody = `## Release Toolkit 已就绪 🎉
-
-感谢使用 **release-toolkit**，为你的 PR 提供自动化发布支持。
-
----
-
-### ⚠️ 需要你对 PR 进行批准（Approve）
-
-- ✅ 收集变更日志
-- ✅ 更新 PR 描述体
-- ✅ 保存变更快照
-
----
-
-💡 **提示：** 你也可以在 PR 描述中使用以下标记来添加变更日志：
-
-\`\`\`
-<!-- RELEASE-LOG-START -->
-你的额外变更说明...
-<!-- RELEASE-LOG-END -->
-\`\`\``;
-
-  const response = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-API-Version': '2022-11-28',
-        'User-Agent': 'release-toolkit-app',
-      },
-      body: JSON.stringify({ body: commentBody }),
-    },
-  );
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Failed to comment: ${response.status} ${text}`);
-  }
-}
-
-/** 触发 GitHub Actions workflow */
-async function triggerWorkflow(
-  token: string,
-  owner: string,
-  repo: string,
-  workflow: string,
-  inputs: Record<string, string | number>,
-  ref: string,
-): Promise<void> {
-  const response = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflow}/dispatches`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-        'User-Agent': 'release-toolkit-app',
-      },
-      body: JSON.stringify({
-        ref,
-        inputs,
-      }),
-    },
-  );
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Failed to trigger ${workflow}: ${response.status} ${text}`);
-  }
-}
-
-/** 获取 installation access token */
-async function getInstallationToken(
-  installationId: number,
-  env: Record<string, string>,
-): Promise<string> {
-  const jwt = await generateJWT(parseInt(env.GITHUB_APP_ID), env.GITHUB_APP_PRIVATE_KEY);
-
-  const response = await fetch(
-    `https://api.github.com/app/installations/${installationId}/access_tokens`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${jwt}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-        'User-Agent': 'release-toolkit-app',
-      },
-    },
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to get installation token: ${response.status}`);
-  }
-
-  const data = (await response.json()) as { token: string };
-  return data.token;
-}
-
-/** 生成 GitHub App JWT */
-async function generateJWT(appId: number, privateKey: string): Promise<string> {
-  const now = Math.floor(Date.now() / 1000);
-  const payload = {
-    iat: now - 60,
-    exp: now + 600,
-    iss: appId,
-  };
-
-  const header = { alg: 'RS256', typ: 'JWT' };
-  const encodedHeader = base64urlEncode(JSON.stringify(header));
-  const encodedPayload = base64urlEncode(JSON.stringify(payload));
-
-  const key = await importPrivateKey(privateKey);
-  const signatureBytes = await crypto.subtle.sign(
-    { name: 'RSASSA-PKCS1-v1_5' },
-    key,
-    new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`),
-  );
-  const encodedSignature = base64urlEncode(
-    String.fromCharCode(...new Uint8Array(signatureBytes)),
-  );
-
-  return `${encodedHeader}.${encodedPayload}.${encodedSignature}`;
-}
-
-/** 导入 PEM 私钥 */
-async function importPrivateKey(pem: string): Promise<CryptoKey> {
-  const pemContents = pem
-    .replace('-----BEGIN RSA PRIVATE KEY-----', '')
-    .replace('-----END RSA PRIVATE KEY-----', '')
-    .replace(/\s/g, '');
-
-  const binaryString = atob(pemContents);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-
-  return crypto.subtle.importKey(
-    'pkcs8',
-    bytes,
-    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-}
-
-/** Base64 URL 编码 */
-function base64urlEncode(str: string): string {
-  return btoa(str)
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-}

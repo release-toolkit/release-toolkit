@@ -23,7 +23,7 @@ describe('plugins integration', () => {
     const formatters: ChangelogFormatter[] = [
       {
         name: 'category-group',
-        format: (entries) => {
+        format: (_entries) => {
           const lines: string[] = [];
           lines.push('### Features');
           lines.push('');

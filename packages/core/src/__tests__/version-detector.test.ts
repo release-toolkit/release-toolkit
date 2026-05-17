@@ -3,8 +3,8 @@ import {
   compareVersions,
   resolvePackageDirs,
   detectVersionChanges,
-} from '../features/release-preview/version-detector.js';
-import type { PackageVersionDiff } from '../features/release-preview/types.js';
+} from '../shared/version.js';
+
 
 // Mock git-reader module
 vi.mock('../shared/git/git-reader.js', () => ({
@@ -75,9 +75,11 @@ describe('detectVersionChanges', () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
-      packageName: 'core',
-      oldVersion: '1.0.0',
-      newVersion: '1.1.0',
+      package: {
+        packageName: 'core',
+        currentVersion: '1.0.0',
+        newVersion: '1.1.0',
+      },
       diffType: 'minor',
     });
   });
@@ -116,6 +118,6 @@ describe('detectVersionChanges', () => {
     const result = await detectVersionChanges('main', 'HEAD', ['packages/*'], '/project');
 
     expect(result).toHaveLength(1);
-    expect(result[0].packageName).toBe('core');
+    expect(result[0].package.packageName).toBe('core');
   });
 });

@@ -2,15 +2,15 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { diffFiles } from '../../shared/git/git-reader.js';
 import { loadConfig } from '../../shared/config/index.js';
-import type { GithubContext } from '../../shared/types.js';
-import type { ReleaseToolkitConfig } from '../../shared/config/index.js';
+import type { GithubContext, ReleaseHookContext, PRLogCollectorResult } from '../../shared/types.js';
 import { getPR, updatePR } from '../../shared/github/api-client.js';
 import { extractReleaseLog, type PackageChangeLog } from './release-log-extractor.js';
-import type { PRLogCollectorOptions, PRLogCollectorResult, PRMeta } from './types.js';
-import { loadPlugins, applyFormatters, parseChangelog } from '../../shared/plugins/index.js';
+import type { PRLogCollectorOptions, PRMeta } from './types.js';
+import { loadPlugins, loadPluginsAsIPlugin, applyFormatters, parseChangelog } from '../../shared/plugins/index.js';
+import { HookRunner } from '../../shared/hook-runner.js';
+import { OUTPUT_MARKERS, escapeRegex } from '../../shared/utils.js';
 
-const OUTPUT_START = '<!-- RELEASE-TOOLKIT-OUTPUT-START -->';
-const OUTPUT_END = '<!-- RELEASE-TOOLKIT-OUTPUT-END -->';
+const { OUTPUT_START, OUTPUT_END } = OUTPUT_MARKERS;
 
 /** 生成标记区的用户指南（使用引用格式，用户可见） */
 function generateSpecExplanation(): string {
@@ -51,12 +51,12 @@ type GitHubPRResponse = {
   head_ref: string;
 };
 
-async function fetchPRMeta(context: GithubContext, _config: ReleaseToolkitConfig): Promise<PRMeta> {
+async function fetchPRMeta(context: GithubContext): Promise<PRMeta> {
   const { data } = await getPR(context);
 
   // getPR 返回 Record<string, unknown>，此处做单次类型断言
   // 对应 GitHub REST API /pulls/{pull_number} 响应的已知字段
-  const prData = data as GitHubPRResponse;
+  const prData = data as unknown as GitHubPRResponse;
 
   return {
     number: prData.number,
@@ -77,16 +77,32 @@ export async function collectPRLog(options: PRLogCollectorOptions): Promise<PRLo
     token: options.token,
   };
 
+  const hookContext: ReleaseHookContext = {
+    packageName: '',
+    oldVersion: '',
+    newVersion: '',
+    tagName: '',
+  };
+
   try {
     const config = loadConfig(options.cwd);
+    const hookRunner = new HookRunner([]);
 
-    const meta = await fetchPRMeta(context, config);
+    // 1. 加载插件
+    const { plugins: iPlugins } = await loadPluginsAsIPlugin(config.plugins);
+    hookRunner.setPlugins(iPlugins);
+
+    // 2. 执行 beforeCollect 钩子
+    await hookRunner.runBeforeCollect(hookContext);
+
+    // 3. 执行核心逻辑
+    const meta = await fetchPRMeta(context);
     const { packageChangeLogs, rawReleaseLog } = extractReleaseLog(
       meta.body,
       config,
     );
 
-    // 生成结构化 Markdown
+    // 生成结构化 Markdown（Worker 环境跳过 git 操作）
     const markdown = await generateStructuredMarkdown(
       meta.number,
       meta.title,
@@ -94,39 +110,39 @@ export async function collectPRLog(options: PRLogCollectorOptions): Promise<PRLo
       meta.baseRef,
       meta.headRef,
       options.cwd,
+      formatters,
+      isWorker,
     );
 
     // 更新 PR 描述体（幂等）
     const updatedBody = updatePRBody(meta.body, markdown);
-    console.log('[collect] 准备更新 PR 描述体，长度:', updatedBody.length);
-    try {
-      await updatePR(context, updatedBody);
-      console.log('[collect] ✅ PR 描述体更新成功');
-    } catch (updateErr) {
-      console.error('[collect] ❌ PR 描述体更新失败:', updateErr);
-      throw updateErr;
-    }
+    await updatePR(context, updatedBody);
 
-    // 保存快照到 .release-toolkit/releases/
+    // 保存快照到 .release-toolkit/releases/（Worker 环境跳过）
     let savedPath: string | undefined;
-    if (options.save) {
+    if (options.save && !isWorker && rawReleaseLog) {
       savedPath = await saveSnapshot(meta.number, meta.title, rawReleaseLog, markdown, options.cwd);
     }
 
-    return {
+    const result: PRLogCollectorResult = {
       success: true,
       prNumber: meta.number,
-      title: meta.title,
-      releaseLog: rawReleaseLog,
+      prTitle: meta.title,
+      changelog: rawReleaseLog || '',
       commentPosted: true,
       savedPath,
     };
+
+    // 4. 执行 afterCollect 钩子
+    await hookRunner.runAfterCollect(hookContext, result);
+
+    return result;
   } catch (err) {
     return {
       success: false,
       prNumber: options.prNumber,
-      title: '',
-      releaseLog: null,
+      prTitle: '',
+      changelog: '',
       commentPosted: false,
       error: err instanceof Error ? err.message : String(err),
     };
@@ -141,11 +157,12 @@ async function generateStructuredMarkdown(
   baseRef: string,
   headRef: string,
   cwd?: string,
+  _formatters: Awaited<ReturnType<typeof loadPlugins>>['formatters'] = [],
+  skipGitOps = false,
 ): Promise<string> {
   const base = cwd || process.cwd();
-  const changedPackages = await detectChangedPackages(baseRef, headRef, base);
-  const config = loadConfig(cwd);
-  const { formatters } = await loadPlugins(config.plugins);
+  const changedPackages = skipGitOps ? [] : await detectChangedPackages(baseRef, headRef, base);
+  const { formatters: loadedFormatters } = await loadPlugins();
 
   const lines: string[] = [];
 
@@ -153,10 +170,12 @@ async function generateStructuredMarkdown(
   lines.push(`# PR #${prNumber} 变更日志`);
   lines.push('');
 
-  // 变更包列表
+  // 变更包列表（Worker 环境显示提示）
   lines.push('## 变更包列表：');
   lines.push('');
-  if (changedPackages.length === 0) {
+  if (skipGitOps) {
+    lines.push('（Worker 环境：请在 CI 中执行完整收集）');
+  } else if (changedPackages.length === 0) {
     lines.push('（无变更包）');
   } else {
     for (const pkg of changedPackages) {
@@ -173,8 +192,12 @@ async function generateStructuredMarkdown(
   for (const { packages, changeLog } of packageChangeLogs) {
     if (packages.length === 0) {
       // 格式 C：无包名声明，应用到所有变更包
-      for (const pkg of changedPackages) {
-        packageLogMap.set(pkg, changeLog);
+      if (skipGitOps) {
+        packageLogMap.set('__default__', changeLog);
+      } else {
+        for (const pkg of changedPackages) {
+          packageLogMap.set(pkg, changeLog);
+        }
       }
     } else {
       // 格式 A/B：应用到指定的包
@@ -184,11 +207,12 @@ async function generateStructuredMarkdown(
     }
   }
 
-  // 为每个变更的包生成独立章节
-  for (const pkg of changedPackages) {
+  // 为每个变更的包生成独立章节（或 Worker 环境下生成默认章节）
+  const packagesToProcess = skipGitOps ? ['__default__'] : changedPackages;
+  for (const pkg of packagesToProcess) {
     lines.push('---');
     lines.push('');
-    lines.push(`## ${pkg}`);
+    lines.push(`## ${pkg === '__default__' ? '变更内容' : pkg}`);
     lines.push('');
     lines.push('### 标题');
     lines.push('');
@@ -196,10 +220,10 @@ async function generateStructuredMarkdown(
     lines.push('');
     lines.push('### 变更日志');
     lines.push('');
-    
+
     const changeLog = packageLogMap.get(pkg) || '（无对应的变更日志）';
     // 应用格式化器
-    const formattedLog = applyFormatters(parseChangelog(changeLog), formatters);
+    const formattedLog = applyFormatters(parseChangelog(changeLog), loadedFormatters);
     lines.push(formattedLog);
     lines.push('');
   }
@@ -285,8 +309,4 @@ function updatePRBody(currentBody: string | null, newContent: string): string {
 
   // 首次运行：追加到描述体末尾
   return `${body}\n\n${wrappedContent}`;
-}
-
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

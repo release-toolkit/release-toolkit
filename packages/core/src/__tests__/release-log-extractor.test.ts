@@ -4,12 +4,21 @@ import type { ReleaseToolkitConfig } from '../shared/config/index.js';
 
 // Minimal config for testing
 const defaultConfig: ReleaseToolkitConfig = {
+  branches: { dev: 'dev', production: 'main' },
   prLogCollector: {
     releaseLogMarker: {
       start: '<!-- RELEASE-LOG-START -->',
       end: '<!-- RELEASE-LOG-END -->',
     },
   },
+  releasePreview: {
+    workspaceFile: 'pnpm-workspace.yaml',
+    noChangeMessage: '⚠️ 本次 PR 未检测到任何包的版本变更，合并后将不会触发发布。',
+  },
+  releasePublisher: {
+    createGithubRelease: true,
+  },
+  plugins: [],
 };
 
 describe('extractReleaseLog', () => {
@@ -126,12 +135,21 @@ More content`;
 
     it('should handle custom markers', () => {
       const config: ReleaseToolkitConfig = {
+        branches: { dev: 'dev', production: 'main' },
         prLogCollector: {
           releaseLogMarker: {
             start: '<!-- CUSTOM-START -->',
             end: '<!-- CUSTOM-END -->',
           },
         },
+        releasePreview: {
+          workspaceFile: 'pnpm-workspace.yaml',
+          noChangeMessage: '⚠️ 本次 PR 未检测到任何包的版本变更，合并后将不会触发发布。',
+        },
+        releasePublisher: {
+          createGithubRelease: true,
+        },
+        plugins: [],
       };
 
       const body = `<!-- CUSTOM-START -->

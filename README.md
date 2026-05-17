@@ -2,122 +2,133 @@
 
 CI 驱动的 **Monorepo 发布工具链** —— 自动收集 PR 变更日志、聚合版本发布、创建 GitHub Release。
 
----
-
-## 核心功能
-
-本工具围绕 `pull_request` 和 `push` 事件，为 Monorepo 项目提供三个核心能力：
-**PR 日志收集（`prLogCollector`）** → **发布预览（`releasePreview`）** → **发布执行（`releasePublisher`）**。
-
-### 一、`prLogCollector`：PR 日志收集（面向开发分支，如 `dev`）
-
-**触发条件**：当向指定的开发分支（如 `- base: dev`）提交或更新 PR 时。
-
-**执行动作**：
-- 自动提取当前 PR 的 **标题（header）** 作为变更摘要
-- 自动读取当前 PR 的 **首个评论中的指定区域**（通过 `<!-- RELEASE-LOG-START -->` / `<!-- RELEASE-LOG-END -->` 标记）作为详细说明
-- 将上述内容格式化后，**幂等更新回当前 PR 的描述体（body）**（使用 `<!-- RELEASE-TOOLKIT-OUTPUT-START -->` / `<!-- RELEASE-TOOLKIT-OUTPUT-END -->` 标记区，每次 PR 变更都自动同步）
-- 同时**保存快照**到 `.release-toolkit/releases/pr{prNumber}-{YY-MM-DD-hh-mm-ss}.md`（如 `pr123-26-05-02-04-53-00.md`），供后续 `releasePreview` 聚合使用
-
-> 作用：让每个 PR 在合并前都沉淀一份结构化的变更记录，作为后续发布日志的数据源。
-
-**用户指南**：在 PR 描述体的 `<!-- RELEASE-TOOLKIT-OUTPUT-START -->` 区域中，会看到以下使用说明：
-
-```markdown
-> 📖 **RELEASE-TOOLKIT 输出说明**
->
-> - 部分包共享日志，部分包独立：
-> ```
-> ## package-a, package-b
-> ### 变更日志
-> - 共同的变更内容
->
-> ## package-c
-> ### 变更日志
-> - package-c 的独立变更
-> ```
->
-> - 无包名声明（基于 `git diff packages/*/package.json`）：
-> ```
-> ### 变更日志
-> - 所有变更包的通用变更内容
-> ```
->
-> ⚠️ 此区域由工具自动生成和维护，请勿手动编辑
->
-```
-
-
----
-
-### 二、`releasePreview`：版本发布预览（面向生产分支，如 `main`）
-
-**触发条件**：当向指定的生产分支（如 `- base: main`）提交或更新 PR 时。
-
-**执行动作**：
-- 仅针对 **Monorepo 项目**，监听范围根据根目录 `pnpm-workspace.yaml` 中声明的 `packages/*` 自动推断
-- 检查 `packages/` 下各子包是否存在**版本号变更**（`package.json` 的 `version` 字段 diff）：
-  - ✅ **存在版本变更**：聚合 `prLogCollector` 沉淀的所有 PR 变更日志，格式化后评论到当前 PR，每次 PR 更新时自动同步
-  - ⚠️ **不存在版本变更**：在 PR 中评论明确的「无版本更新」提示，避免误发布
-
-> 作用：合并到生产分支前提供最终的发布预览，确保版本号与变更日志完全对齐。
-
----
-
-### 三、`releasePublisher`：自动发布与后置钩子（PR 合并后）
-
-**触发条件**：当 `releasePreview` 对应的 PR 被合并到生产分支（如 `main`）时。
-
-**执行动作**：
-- 根据 `releasePreview` 聚合的变更日志，自动创建对应版本的 **GitHub Release**
-- 发布完成后，触发用户配置的 **`afterRelease` 钩子回调**，支持自定义扩展（如 `npm publish`、通知推送、部署触发等）
-
-> 作用：将「合并即发布」作为最后一步固化到 CI，实现端到端的自动化交付。
-
----
-
-## 工作流程总览
+## 整体流程
 
 ```mermaid
-graph TD
-    A["1️⃣ PR → dev"] --> Review{👀 审核}
-    Review -->|"需修改"| A
-    Review -->|"✅ 批准"| B["prLogCollector\n更新 PR 描述体 + 保存快照"]
-    B --> C["合并到 dev"]
-    C --> D["2️⃣ PR → main"]
-    D --> E["releasePreview\n检测版本变更"]
-    E -->|"✅ 有变更"| F["聚合日志 + 评论预览"]
-    E -->|"⚠️ 无变更"| G["评论无版本更新"]
-    F --> H["合并到 main"]
-    G --> H
-    H --> I["3️⃣ releasePublisher"]
-    I --> J["创建 GitHub Release"]
-    J --> K["执行 afterRelease"]
-    K --> L(["✅ 发布完成"])
+flowchart TD
+    subgraph PR阶段
+        A[PR → dev] --> B[prLogCollector]
+        B --> B1[提取 PR 标题 + 评论日志]
+        B1 --> B2[更新 PR 描述体]
+        B2 --> B3[保存快照到 .release-toolkit/]
+    end
 
-    style B fill:#e3f2fd
-    style E fill:#f3e5f5
-    style I fill:#fff3e0
+    subgraph 预览阶段
+        C[PR → main] --> D[releasePreview]
+        D --> D1{检测版本变更?}
+        D1 -->|有变更| D2[聚合日志 + 评论预览]
+        D1 -->|无变更| D3[评论无版本更新]
+    end
+
+    subgraph 发布阶段
+        E[PR 合并到 main] --> F[releasePublisher]
+        F --> F1[beforePublish 钩子]
+        F1 --> F2[beforeTag 钩子]
+        F2 --> F3[创建 Git Tags]
+        F3 --> F4[创建 GitHub Release]
+        F4 --> F5[afterRelease 钩子]
+        F5 --> F6[afterPublish 钩子]
+    end
+
+    B3 --> C
+    D2 --> E
+    D3 --> E
 ```
 
----
+## 生命周期钩子
 
-## 项目配置
+### releasePublisher 钩子
 
-工具支持通过 **`.release-toolkit/config.json`** 统一配置三大核心功能的行为。该文件位于项目根目录，所有字段均为可选，未配置时使用下方默认值。
+发布流程中可插入自定义逻辑的关键节点：
 
-### 配置文件位置
-
+```mermaid
+flowchart TD
+    A[beforePublish] --> B[检测版本变更]
+    B --> C[beforeTag]
+    C --> D[创建 Git Tags]
+    D --> E[创建 GitHub Release]
+    E --> F[afterRelease]
+    F --> G[afterPublish]
 ```
-<项目根目录>/.release-toolkit/config.json
-```
 
-### 完整配置示例
+| 钩子 | 触发时机 | 用途 |
+|------|----------|------|
+| `beforePublish` | 发布流程开始前 | 预检查、构建验证 |
+| `beforeTag` | 创建 Git Tag 前 | 自定义 tag 格式、额外校验 |
+| `afterRelease` | GitHub Release 创建后 | 部署到 CDN、发送通知 |
+| `afterPublish` | 全部发布完成后 | 清理、统计、总结 |
+
+### prLogCollector 钩子（插件）
+
+| 钩子 | 触发时机 |
+|------|----------|
+| `beforeCollect` | 收集 PR 日志前 |
+| `afterCollect` | 收集完成/失败后 |
+
+### releasePreview 钩子（插件）
+
+| 钩子 | 触发时机 |
+|------|----------|
+| `beforePreview` | 预览生成前 |
+| `afterPreview` | 预览生成后 |
+
+## Hook 执行方式
+
+支持三种执行方式：
+
+| 类型 | 说明 | 示例 |
+|------|------|------|
+| `command` | Shell 命令 | `{ "type": "command", "command": "pnpm -r publish" }` |
+| `script` | 项目脚本文件 | `{ "type": "script", "script": "./scripts/release.js" }` |
+| `package` | npm 包 | `{ "type": "package", "name": "semantic-release", "args": [] }` |
 
 ```json
 {
-  "devBranch": "dev",
-  "productionBranch": "main",
+  "releasePublisher": {
+    "beforeTag": [
+      { "type": "command", "command": "pnpm build" }
+    ],
+    "afterRelease": [
+      { "type": "command", "command": "pnpm -r publish --access public" },
+      { "type": "script", "script": "./scripts/notify.js" },
+      { "type": "package", "name": "@myorg/release-notify", "args": ["--channel", "#releases"] }
+    ],
+    "afterPublish": [
+      { "type": "command", "command": "pnpm -r deploy" }
+    ]
+  }
+}
+```
+
+## 包结构
+
+```
+packages/
+├── core/              # 核心引擎（功能模块 + 共享工具）
+├── cli/               # CLI 入口（release 命令）
+├── changelog-presets/ # Changelog 格式化预设
+└── app-server/        # Cloudflare Worker 服务端
+```
+
+## 依赖关系
+
+```mermaid
+graph LR
+    CLI["@release-toolkit/cli"] --> Core["@release-toolkit/core"]
+    Presets["@release-toolkit/changelog-presets"] --> Core
+    AppServer["@release-toolkit/app-server"] -.->|独立| Env[Cloudflare Workers]
+```
+
+## 配置
+
+在项目根目录创建 `.release-toolkit/config.json`：
+
+```json
+{
+  "branches": {
+    "dev": "dev",
+    "production": "main"
+  },
   "prLogCollector": {
     "releaseLogMarker": {
       "start": "<!-- RELEASE-LOG-START -->",
@@ -125,37 +136,16 @@ graph TD
     }
   },
   "releasePreview": {
-    "workspaceFile": "pnpm-workspace.yaml",
-    "noChangeMessage": "⚠️ 本次 PR 未检测到任何包的版本变更，合并后将不会触发发布。"
+    "workspaceFile": "pnpm-workspace.yaml"
   },
   "releasePublisher": {
     "createGithubRelease": true,
-    "afterRelease": [
-      "pnpm -r publish --access public",
-      "echo 'release done'"
-    ]
+    "beforeTag": [],
+    "afterRelease": [{ "type": "command", "command": "pnpm -r publish" }],
+    "afterPublish": []
   }
 }
 ```
-
-### 配置项说明
-
-| 配置项 | 类型 | 默认值 | 所属功能 | 说明 |
-|--------|------|--------|----------|------|
-| `devBranch` | `string` | `"dev"` | `prLogCollector` | 触发 PR 日志收集的目标分支 |
-| `productionBranch` | `string` | `"main"` | `releasePreview` / `releasePublisher` | 触发版本预览与发布的目标分支 |
-| `prLogCollector.releaseLogMarker.start` | `string` | `"<!-- RELEASE-LOG-START -->"` | `prLogCollector` | 从 PR 首个评论提取内容的起始标记 |
-| `prLogCollector.releaseLogMarker.end` | `string` | `"<!-- RELEASE-LOG-END -->"` | `prLogCollector` | 从 PR 首个评论提取内容的结束标记 |
-| `releasePreview.workspaceFile` | `string` | `"pnpm-workspace.yaml"` | `releasePreview` | 定义 Monorepo 子包范围的文件 |
-| `releasePreview.noChangeMessage` | `string` | 内置中文提示 | `releasePreview` | 无版本变更时评论到 PR 的提示内容 |
-| `releasePublisher.createGithubRelease` | `boolean` | `true` | `releasePublisher` | 是否创建 GitHub Release |
-| `releasePublisher.afterRelease` | `string[]` | `[]` | `releasePublisher` | 发布成功后顺序执行的 Shell 命令列表 |
-
-### 零配置也可工作
-
-若项目根目录不存在 `.release-toolkit/config.json`，工具将**完全使用默认值**运行，无需任何额外配置。
-
----
 
 ## License
 

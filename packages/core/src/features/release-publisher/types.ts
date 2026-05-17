@@ -1,9 +1,7 @@
-export interface ReleaseHookContext {
-  packageName: string;
-  oldVersion: string;
-  newVersion: string;
-  tagName: string;
-}
+import type { ReleaseHookContext } from '../../shared/types.js';
+import type { AfterReleaseHook, HookCommand } from '../../shared/config/index.js';
+
+export type { ReleaseHookContext, AfterReleaseHook, HookCommand };
 
 export interface ReleasePublisherOptions {
   cwd?: string;

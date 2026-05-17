@@ -1,11 +1,76 @@
 import { loadConfig } from '../../shared/config/index.js';
 import { postOrUpdateComment } from '../../shared/github/pr-commenter.js';
-import { scanWorkspace } from './workspace-scanner.js';
-import { detectVersionChanges } from './version-detector.js';
-import { aggregateLogs } from './log-aggregator.js';
+import { getPullRequests } from '../../shared/github/api-client.js';
+import { scanWorkspace } from '../../shared/workspace.js';
+import { detectVersionChanges } from '../../shared/version.js';
+import { aggregateReleaseLogs } from '../../shared/changelog-aggregator.js';
+import { loadPluginsAsIPlugin } from '../../shared/plugins/index.js';
+import { HookRunner } from '../../shared/hook-runner.js';
 import { formatReleasePreviewComment } from './formatter.js';
-import { loadPlugins } from '../../shared/plugins/index.js';
 import type { ReleasePreviewOptions, ReleasePreviewResult } from './types.js';
+import type { VersionDiffResult } from '../../shared/types.js';
+import { OUTPUT_MARKERS, escapeRegex } from '../../shared/utils.js';
+
+/**
+ * 通过 API 获取聚合的 Release Logs
+ */
+async function aggregateReleaseLogsByAPI(): Promise<string> {
+  const token = process.env.GITHUB_TOKEN || '';
+  const owner = process.env.GITHUB_REPOSITORY?.split('/')[0] || '';
+  const repo = process.env.GITHUB_REPOSITORY?.split('/')[1] || '';
+
+  if (!token || !owner || !repo) {
+    return '';
+  }
+
+  try {
+    // 获取已合并的 PR 列表
+    const prs = await getPullRequests(
+      { token, owner, repo },
+      'closed',
+      process.env.GITHUB_HEAD_REF_NAME || 'main',
+    );
+
+    const mergedPrs = prs.filter((pr) => pr.merged === true);
+
+    if (mergedPrs.length === 0) {
+      return '';
+    }
+
+    // 获取每个 PR 的日志（从 PR body 中提取 RELEASE-TOOLKIT-OUTPUT 区域）
+    const { OUTPUT_START, OUTPUT_END } = OUTPUT_MARKERS;
+
+    const releaseLogs: string[] = [];
+
+    for (const pr of mergedPrs) {
+      const prNumber = pr.number;
+      const prBody = pr.body || '';
+
+      // 提取 RELEASE-TOOLKIT-OUTPUT 区域
+      const match = prBody.match(
+        new RegExp(`${escapeRegex(OUTPUT_START)}[\\s\\S]*?${escapeRegex(OUTPUT_END)}`),
+      );
+
+      if (match) {
+        const log = match[0];
+        // 移除标记和说明文字
+        const cleanLog = log
+          .replace(OUTPUT_START, '')
+          .replace(OUTPUT_END, '')
+          .replace(/> 📖.*?\n>?\n>?/g, '')
+          .trim();
+
+        if (cleanLog) {
+          releaseLogs.push(`### PR #${prNumber}\n\n${cleanLog}`);
+        }
+      }
+    }
+
+    return releaseLogs.join('\n\n');
+  } catch {
+    return '';
+  }
+}
 
 export async function previewRelease(
   options: ReleasePreviewOptions,
@@ -21,22 +86,49 @@ export async function previewRelease(
 
   try {
     const config = loadConfig(options.cwd);
-    const workspaceInfo = scanWorkspace(options.cwd);
-    const versionDiffs = await detectVersionChanges(
-      config.productionBranch || 'main',
-      'HEAD',
-      workspaceInfo.packages,
-      options.cwd,
-    );
+    const hookRunner = new HookRunner([]);
+
+    // 1. 加载插件
+    const { plugins: iPlugins, formatters } = await loadPluginsAsIPlugin(config.plugins);
+    hookRunner.setPlugins(iPlugins);
+
+    // 2. 执行 beforePreview 钩子
+    await hookRunner.runBeforePreview({
+      packageName: '',
+      oldVersion: '',
+      newVersion: '',
+      tagName: '',
+    });
+
+    // 3. 执行核心逻辑
+    let versionDiffs: VersionDiffResult[];
+    let aggregatedLog: string;
+
+    if (isWorker) {
+      // Worker 环境使用 API
+      versionDiffs = await detectVersionChanges(
+        config.branches.production,
+        process.env.GITHUB_HEAD_REF_NAME || 'HEAD',
+        [config.releasePreview.workspaceFile],
+      );
+      aggregatedLog = await aggregateReleaseLogsByAPI();
+    } else {
+      // 本地环境使用文件系统
+      const workspaceInfo = scanWorkspace(config.releasePreview.workspaceFile, options.cwd);
+      versionDiffs = await detectVersionChanges(
+        config.branches.production,
+        'HEAD',
+        Array.isArray(workspaceInfo.packages) ? workspaceInfo.packages : ([] as string[]),
+        options.cwd,
+      );
+      aggregatedLog = aggregateReleaseLogs(options.cwd);
+    }
 
     const hasVersionChange = versionDiffs.length > 0;
-    const aggregatedLog = hasVersionChange ? aggregateLogs(options.cwd) : '';
-    const noChangeMessage =
-      config.releasePreview?.noChangeMessage ??
-      '⚠️ 本次 PR 未检测到任何包的版本变更，合并后将不会触发发布。';
+    const noChangeMessage = config.releasePreview.noChangeMessage;
 
-    // 加载插件
-    const { formatters } = await loadPlugins(config.plugins);
+    // 判断 PR 是否已合并（用于区分预览模式和正式发布模式）
+    const isMerged = process.env.GITHUB_PR_MERGED === 'true';
 
     const commentBody = formatReleasePreviewComment(
       hasVersionChange,
@@ -44,17 +136,28 @@ export async function previewRelease(
       aggregatedLog,
       noChangeMessage,
       formatters,
+      isMerged,
     );
 
     await postOrUpdateComment(context, commentBody);
 
-    return {
+    const result: ReleasePreviewResult = {
       success: true,
       prNumber: options.prNumber,
       hasVersionChange,
       versionDiffs,
       commentPosted: true,
     };
+
+    // 4. 执行 afterPreview 钩子
+    await hookRunner.runAfterPreview({
+      packageName: '',
+      oldVersion: '',
+      newVersion: '',
+      tagName: '',
+    }, result);
+
+    return result;
   } catch (err) {
     return {
       success: false,
