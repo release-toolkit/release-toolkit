@@ -4,9 +4,6 @@ main = "dist/index.mjs"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
-[observability]
-enabled = false
-
 [vars]
 GITHUB_APP_ID = "3589117"
 
