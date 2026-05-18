@@ -1,0 +1,4 @@
+{
+  "build_command": "pnpm -r build",
+  "deploy_command": "npx wrangler deploy"
+}
