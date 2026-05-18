@@ -4,6 +4,9 @@ main = "dist/index.mjs"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
+[build]
+command = "pnpm --filter @release-toolkit/core build && pnpm --filter @release-toolkit/changelog-presets build"
+
 [observability]
 enabled = false
 
