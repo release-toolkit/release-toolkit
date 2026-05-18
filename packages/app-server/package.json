@@ -21,7 +21,7 @@
     "octokit": "^5.0.4"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250501.0",
+    "@cloudflare/workers-types": "^4.20260518.0",
     "wrangler": "^4.92.0"
   }
 }
