@@ -10,10 +10,14 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "noEmit": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
     "paths": {
-      "@release-toolkit/core": ["../core/src/index.ts"],
-      "@release-toolkit/changelog-presets": ["../changelog-presets/src/index.ts"]
+      "@release-toolkit/core": ["../core/dist/index.d.mts"],
+      "@release-toolkit/changelog-presets": ["../changelog-presets/dist/index.d.mts"]
     }
   },
   "include": ["src/**/*"]
