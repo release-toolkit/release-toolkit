@@ -1,6 +1,5 @@
 name = "release-toolkit-app"
 main = "dist/index.mjs"
-build_command = "pnpm -r build"
 
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
