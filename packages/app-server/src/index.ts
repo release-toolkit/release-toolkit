@@ -13,8 +13,9 @@
  */
 
 import { extractReleaseLog, OUTPUT_MARKERS } from '@release-toolkit/core';
+import { Octokit, App, type Octokit as OctokitType } from 'octokit';
 
-const { OUTPUT_START, OUTPUT_END } = OUTPUT_MARKERS;
+const { START: OUTPUT_START, END: OUTPUT_END } = OUTPUT_MARKERS;
 
 interface Env {
   GITHUB_APP_ID?: string;
@@ -34,7 +35,7 @@ interface GithubContext {
   repoName: string;
   token?: string;
   /** Worker 环境下已认证的 octokit 实例 */
-  octokit?: unknown;
+  octokit?: OctokitType;
 }
 
 interface PRLogCollectorResult {
@@ -142,7 +143,6 @@ async function runPRLogCollector(
   // 获取 PR 描述体以提取已有的变更日志
   let prBody: string | null = null;
   try {
-    const { Octokit } = await import('octokit');
     const octokit = new Octokit({ auth: context.token });
     const { data } = await octokit.rest.pulls.get({
       owner: context.repoOwner,
@@ -164,13 +164,7 @@ async function runPRLogCollector(
 
   try {
     // Worker 环境使用已认证的 octokit 实例，否则使用 token
-    let octokit;
-    if (context.octokit) {
-      octokit = context.octokit as { rest: { issues: { createComment: (params: unknown) => Promise<unknown> } } };
-    } else {
-      const { Octokit } = await import('octokit');
-      octokit = new Octokit({ auth: context.token });
-    }
+    const octokit = context.octokit ?? new Octokit({ auth: context.token });
     await octokit.rest.issues.createComment({
       owner: context.repoOwner,
       repo: context.repoName,
@@ -216,7 +210,13 @@ function generateLogPreview(prBody: string | null, _prNumber: number): string {
   }
 
   // 调用 core 的 extractReleaseLog 提取变更日志
-  const { rawReleaseLog } = extractReleaseLog(prBody, {});
+  const { rawReleaseLog } = extractReleaseLog(prBody, {
+    branches: { dev: 'dev', production: 'main' },
+    prLogCollector: {},
+    releasePreview: { workspaceFile: 'pnpm-workspace.yaml', noChangeMessage: '' },
+    releasePublisher: { createGithubRelease: false },
+    plugins: [],
+  });
 
   if (!rawReleaseLog) {
     return `${OUTPUT_START}\n${OUTPUT_END}`;
@@ -269,7 +269,6 @@ async function triggerLogWrite(
 
   try {
     // 使用 token 认证
-    const { Octokit } = await import('octokit');
     const octokit = new Octokit({ auth: context.token });
 
     // 获取当前 PR 描述体
@@ -499,7 +498,6 @@ export default {
       let authenticatedOctokit: GithubContext['octokit'];
       if (env.GITHUB_APP_ID && env.GITHUB_APP_PRIVATE_KEY) {
         try {
-          const { App } = await import('octokit');
           const app = new App({
             appId: Number(env.GITHUB_APP_ID),
             privateKey: env.GITHUB_APP_PRIVATE_KEY,

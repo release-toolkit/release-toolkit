@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "module": "Node16",
+    "moduleResolution": "node16",
     "lib": ["ES2022"],
     "types": ["@cloudflare/workers-types", "node"],
     "strict": true,
@@ -10,7 +10,11 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@release-toolkit/core": ["../core/src/index.ts"],
+      "@release-toolkit/changelog-presets": ["../changelog-presets/src/index.ts"]
+    }
   },
   "include": ["src/**/*"]
 }
