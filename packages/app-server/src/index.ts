@@ -190,40 +190,42 @@ async function runPRLogCollector(
 /**
  * 生成 PR 通知
  */
-function generatePRNotification(prNumber: number, prTitle: string): string {
-  return `📢 **PR #${prNumber} 待审批**
+function generatePRNotification(prNumber: number, _prTitle: string): string {
+  return `👋 **PR #${prNumber} 变更日志预览**
 
-此 PR 包含以下变更：
-- PR 标题: ${prTitle}
-
----
-请相关同事审批后，日志将自动写入 PR 描述体。`;
+以下为自动生成的日志预览， approved 后写入。`;
 }
 
 /**
  * 生成日志预览
  */
-function generateLogPreview(_prNumber: number, prTitle: string): string {
-  return `## 📝 变更日志预览
+function generateLogPreview(_prNumber: number, _prTitle: string): string {
+  return `${OUTPUT_START}
+## 变更包
+- package-a: 1.0.0 → 1.1.0
 
-### PR 信息
-**PR 标题**: ${prTitle}
+---
+
+## package-a
+
+### 标题
+自定义标题
 
 ### 变更日志
-- ${prTitle}
-
-> 💡 此为自动生成的预览，可在评论中修改后确认。`;
+- 日志内容1
+- 日志内容2
+${OUTPUT_END}`;
 }
 
 /**
  * 生成修改指南
  */
 function generateEditGuide(): string {
-  return `## ✏️ 如何修改变更日志
+  return `<details>
+<summary>如何修改日志</summary>
 
-在 PR 首条评论中，使用以下格式：
+在评论中**第一个回复**以下格式（替换为你的真实内容）：
 
-\`\`\`
 ${OUTPUT_START}
 ## 变更包
 - package-a: 1.0.0 → 1.1.0
@@ -239,12 +241,7 @@ ${OUTPUT_START}
 - 日志内容1
 - 日志内容2
 ${OUTPUT_END}
-\`\`\`
-
-**操作步骤**：
-1. 点击 PR 描述体右上角 **⋮** → **New issue** → **Write and tag**
-2. 或直接在 PR 评论区回复（首个评论会被识别）
-3. 保存后重新触发 CI 即可更新`;
+</details>`;
 }
 
 // ============================================================================
