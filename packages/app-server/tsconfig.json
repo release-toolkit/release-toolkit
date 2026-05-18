@@ -14,11 +14,7 @@
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "./dist",
-    "rootDir": "./src",
-    "paths": {
-      "@release-toolkit/core": ["../core/dist/index.d.mts"],
-      "@release-toolkit/changelog-presets": ["../changelog-presets/dist/index.d.mts"]
-    }
+    "rootDir": "./src"
   },
   "include": ["src/**/*"]
 }
