@@ -11,9 +11,9 @@
     }
   },
   "scripts": {
-    "dev": "pnpm --filter @release-toolkit/core build && pnpm --filter @release-toolkit/changelog-presets build && wrangler dev",
-    "build": "pnpm --filter @release-toolkit/core build && pnpm --filter @release-toolkit/changelog-presets build",
-    "deploy": "pnpm --filter @release-toolkit/core build && pnpm --filter @release-toolkit/changelog-presets build && wrangler deploy",
+    "dev": "pnpm build && wrangler dev",
+    "build": "tsdown",
+    "deploy": "tsdown && wrangler deploy",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
