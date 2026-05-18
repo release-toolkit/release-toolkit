@@ -13,7 +13,7 @@
   "scripts": {
     "dev": "pnpm --filter @release-toolkit/core build && pnpm --filter @release-toolkit/changelog-presets build && wrangler dev",
     "build": "pnpm -r build",
-    "deploy": "pnpm build && wrangler deploy",
+    "deploy": "pnpm --filter @release-toolkit/core build && pnpm --filter @release-toolkit/changelog-presets build && wrangler deploy",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
