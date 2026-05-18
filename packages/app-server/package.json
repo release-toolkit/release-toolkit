@@ -11,6 +11,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@release-toolkit/core": "workspace:*",
     "octokit": "^5.0.4"
   },
   "devDependencies": {

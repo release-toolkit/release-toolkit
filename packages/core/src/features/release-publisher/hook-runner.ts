@@ -198,7 +198,7 @@ function buildHookEnv(context: ReleaseHookContext, cwd?: string): NodeJS.Process
  */
 function detectVersionType(oldVersion: string, newVersion: string): string {
   try {
-    const { compare } = await import('semver');
+    const { compare } = require('semver');
     const v1 = oldVersion.split('-')[0] || oldVersion;
     const v2 = newVersion.split('-')[0] || newVersion;
     const c = compare(v1, v2);

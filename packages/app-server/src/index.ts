@@ -12,14 +12,9 @@
  * - PR 合并到 main → releasePublisher（发布）
  */
 
+import { extractReleaseLog, OUTPUT_MARKERS } from '@release-toolkit/core';
 
-
-// ============================================================================
-// 常量定义
-// ============================================================================
-
-const OUTPUT_START = '<!-- RELEASE-TOOLKIT-OUTPUT-START -->';
-const OUTPUT_END = '<!-- RELEASE-TOOLKIT-OUTPUT-END -->';
+const { OUTPUT_START, OUTPUT_END } = OUTPUT_MARKERS;
 
 interface Env {
   GITHUB_APP_ID?: string;
@@ -144,9 +139,25 @@ async function runPRLogCollector(
 ): Promise<PRLogCollectorResult> {
   console.log(`[prLogCollector] Processing PR #${prNumber}: ${prTitle}`);
 
+  // 获取 PR 描述体以提取已有的变更日志
+  let prBody: string | null = null;
+  try {
+    const { Octokit } = await import('octokit');
+    const octokit = new Octokit({ auth: context.token });
+    const { data } = await octokit.rest.pulls.get({
+      owner: context.repoOwner,
+      repo: context.repoName,
+      pull_number: prNumber,
+    });
+    prBody = (data as { body?: string | null }).body ?? null;
+    console.log(`[prLogCollector] PR body length: ${prBody?.length ?? 0}`);
+  } catch (err) {
+    console.error('[prLogCollector] Failed to get PR body:', err);
+  }
+
   // Worker 环境下，直接生成通知评论
   const notification = generatePRNotification(prNumber, prTitle);
-  const preview = generateLogPreview(prNumber, prTitle);
+  const preview = generateLogPreview(prBody, prNumber);
   const guide = generateEditGuide();
 
   const body = `${notification}\n\n---\n\n${preview}\n\n---\n\n${guide}`;
@@ -197,24 +208,22 @@ function generatePRNotification(prNumber: number, _prTitle: string): string {
 }
 
 /**
- * 生成日志预览
+ * 生成日志预览（调用 core 的 extractReleaseLog）
  */
-function generateLogPreview(_prNumber: number, _prTitle: string): string {
-  return `${OUTPUT_START}
-## 变更包
-- package-a: 1.0.0 → 1.1.0
+function generateLogPreview(prBody: string | null, _prNumber: number): string {
+  if (!prBody) {
+    return `${OUTPUT_START}\n${OUTPUT_END}`;
+  }
 
----
+  // 调用 core 的 extractReleaseLog 提取变更日志
+  const { rawReleaseLog } = extractReleaseLog(prBody, {});
 
-## package-a
+  if (!rawReleaseLog) {
+    return `${OUTPUT_START}\n${OUTPUT_END}`;
+  }
 
-### 标题
-自定义标题
-
-### 变更日志
-- 日志内容1
-- 日志内容2
-${OUTPUT_END}`;
+  // 格式化为标准输出格式
+  return `${OUTPUT_START}\n${rawReleaseLog}\n${OUTPUT_END}`;
 }
 
 /**

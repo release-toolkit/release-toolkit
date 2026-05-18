@@ -61,8 +61,12 @@ export {
   parseChangelog,
 } from './shared/plugins/index.js';
 
+// Shared: utils
+export { IS_WORKER, escapeRegex, parseGithubRepository, OUTPUT_MARKERS } from './shared/utils.js';
+
 // Features: prLogCollector
 export { collectPRLog } from './features/pr-log-collector/index.js';
+export { extractReleaseLog } from './features/pr-log-collector/release-log-extractor.js';
 export type {
   PRLogCollectorOptions,
   PRLogCollectorResult,
