@@ -56,7 +56,7 @@ importers:
         specifier: ^4.20260518.0
         version: 4.20260518.1
       wrangler:
-        specifier: ^4.92.0
+        specifier: ^4.89.0
         version: 4.92.0(@cloudflare/workers-types@4.20260518.1)
 
   packages/changelog-presets:
