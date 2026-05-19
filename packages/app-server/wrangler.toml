@@ -1,4 +1,4 @@
-service = "release-toolkit"
+name = "release-toolkit"
 main = "dist/index.mjs"
 
 compatibility_date = "2026-01-01"
