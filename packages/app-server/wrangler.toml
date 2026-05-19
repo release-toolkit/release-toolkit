@@ -4,10 +4,6 @@ main = "dist/index.mjs"
 compatibility_date = "2026-01-01"
 compatibility_flags = ["nodejs_compat"]
 
-# 解析本地 workspace 包
-[alias]
-"@release-toolkit/core" = "../../core/dist/index.mjs"
-
 [vars]
 GITHUB_APP_ID = "3589117"
 
