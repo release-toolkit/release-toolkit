@@ -12,10 +12,73 @@
  * - PR 合并到 main → releasePublisher（发布）
  */
 
-import { extractReleaseLog, OUTPUT_MARKERS } from '@release-toolkit/core';
 import { Octokit, App, type Octokit as OctokitType } from 'octokit';
 
+// ============================================================================
+// 内联核心函数（避免依赖 Node.js API）
+// ============================================================================
+
+/** 输出标记常量 */
+const OUTPUT_MARKERS = {
+  START: '<!-- RELEASE-TOOLKIT-OUTPUT-START -->',
+  END: '<!-- RELEASE-TOOLKIT-OUTPUT-END -->',
+} as const;
+
 const { START: OUTPUT_START, END: OUTPUT_END } = OUTPUT_MARKERS;
+
+/**
+ * 解析 RELEASE-LOG 标记区内容
+ * 支持格式 A/B/C
+ */
+interface PackageChangeLog {
+  packages: string[];
+  changeLog: string;
+}
+
+interface ExtractResult {
+  packageChangeLogs: PackageChangeLog[];
+  rawReleaseLog: string | null;
+  bodyWithoutMarker: string;
+}
+
+/** 简化的配置类型 */
+interface SimpleConfig {
+  prLogCollector?: {
+    releaseLogMarker?: {
+      start?: string;
+      end?: string;
+    };
+  };
+}
+
+/**
+ * 从 PR body 中提取 RELEASE-LOG 标记区内容
+ */
+function extractReleaseLog(body: string | null, config: SimpleConfig): { rawReleaseLog: string | null } {
+  if (!body) {
+    return { rawReleaseLog: null };
+  }
+
+  const startMarker =
+    config.prLogCollector?.releaseLogMarker?.start ??
+    '<!-- RELEASE-LOG-START -->';
+  const endMarker =
+    config.prLogCollector?.releaseLogMarker?.end ??
+    '<!-- RELEASE-LOG-END -->';
+
+  const startIdx = body.indexOf(startMarker);
+  const endIdx = body.indexOf(endMarker);
+
+  if (startIdx === -1 || endIdx === -1 || startIdx >= endIdx) {
+    return { rawReleaseLog: null };
+  }
+
+  const releaseLog = body
+    .substring(startIdx + startMarker.length, endIdx)
+    .trim();
+
+  return { rawReleaseLog: releaseLog || null };
+}
 
 interface Env {
   GITHUB_APP_ID?: string;
@@ -202,20 +265,16 @@ function generatePRNotification(prNumber: number, _prTitle: string): string {
 }
 
 /**
- * 生成日志预览（调用 core 的 extractReleaseLog）
+ * 生成日志预览（使用内联的 extractReleaseLog）
  */
 function generateLogPreview(prBody: string | null, _prNumber: number): string {
   if (!prBody) {
     return `${OUTPUT_START}\n${OUTPUT_END}`;
   }
 
-  // 调用 core 的 extractReleaseLog 提取变更日志
+  // 使用内联的 extractReleaseLog 提取变更日志
   const { rawReleaseLog } = extractReleaseLog(prBody, {
-    branches: { dev: 'dev', production: 'main' },
     prLogCollector: {},
-    releasePreview: { workspaceFile: 'pnpm-workspace.yaml', noChangeMessage: '' },
-    releasePublisher: { createGithubRelease: false },
-    plugins: [],
   });
 
   if (!rawReleaseLog) {
