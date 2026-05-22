@@ -4,24 +4,26 @@ import { detectVersionChanges } from '../shared/version.js';
 import { createTagsForDiffs } from '../features/release-publisher/tag-manager.js';
 import { createGithubRelease } from '../features/release-publisher/github-release.js';
 
-// Mock all dependencies
-vi.mock('../shared/config/index.js', () => ({
-  loadConfig: vi.fn(() => ({
-    branches: { base: 'main' },
-    releasePreview: {
-      workspaceFile: 'pnpm-workspace.yaml',
-      noChangeMessage: '⚠️ 无版本变更',
-    },
-    releasePublisher: { createGithubRelease: true },
-    prLogCollector: {},
-    plugins: [],
-  })),
-}));
+// Mock all dependencies（保留 resolveGitTagName 等真实实现）
+vi.mock('../shared/config/index.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../shared/config/index.js')>();
+  return {
+    ...actual,
+    loadConfig: vi.fn(() => ({
+      branches: { base: 'main' },
+      releasePreview: {
+        workspaceFile: 'pnpm-workspace.yaml',
+        noChangeMessage: '⚠️ 无版本变更',
+      },
+      releasePublisher: { createGithubRelease: true },
+      prLogCollector: {},
+      plugins: [],
+    })),
+  };
+});
 
-vi.mock('../features/release-preview/workspace-scanner.js', () => ({
-  scanWorkspace: vi.fn(() => ({
-    packages: ['packages/*'],
-  })),
+vi.mock('../shared/workspace.js', () => ({
+  resolveWorkspacePackages: vi.fn(() => Promise.resolve(['packages/*'])),
 }));
 
 vi.mock('../shared/version.js', () => ({
@@ -39,7 +41,11 @@ vi.mock('../features/release-publisher/github-release.js', () => ({
 }));
 
 vi.mock('../features/release-publisher/hook-runner.js', () => ({
-  runAfterReleaseHooks: vi.fn(),
+  runPublisherHooks: vi.fn(() =>
+    Promise.resolve({ allSuccess: true, results: [], errors: [] }),
+  ),
+  runHooks: vi.fn(() => Promise.resolve([])),
+  runHooksAndCheck: vi.fn(() => Promise.resolve({ allSuccess: true, results: [] })),
 }));
 
 describe('publishRelease', () => {

@@ -17,8 +17,16 @@ export type {
   ReleasePublisherResult,
 } from './types.js';
 
-export { loadConfig, CONFIG_DIR, CONFIG_FILE, DEFAULT_CONFIG } from './config/index.js';
-export type { ReleaseToolkitConfig } from './config/index.js';
+export {
+  loadConfig,
+  CONFIG_DIR,
+  CONFIG_FILE,
+  DEFAULT_CONFIG,
+  applyGitTagTemplate,
+  resolveGitTagName,
+  resolveGitTagMessage,
+} from './config/index.js';
+export type { ReleaseToolkitConfig, LoadConfigOptions } from './config/index.js';
 
 export {
   createOctokit,
@@ -43,12 +51,29 @@ export {
   parseChangelog,
 } from './plugins/index.js';
 
-export { HookRunner } from './hook-runner.js';
-export type { HookResult } from './hook-runner.js';
+export { PluginHookRunner, HookRunner } from './hook-runner.js';
+export type { PluginHookResult, HookResult } from './hook-runner.js';
 
 // Version detection & workspace scanning
 export { detectVersionChanges, resolvePackageDirs, compareVersions } from './version.js';
-export { scanWorkspace } from './workspace.js';
+export {
+  scanWorkspace,
+  resolveWorkspacePackages,
+  parseWorkspacePackages,
+} from './workspace.js';
+export type { WorkspaceApiContext } from './workspace.js';
+export {
+  fetchWorkspacePackagesByAPI,
+  fetchWorkspacePackagesWithOctokit,
+  workspaceContextFromEnv,
+} from './workspace-api.js';
+export {
+  detectVersionChangesByAPI,
+  detectVersionChangesWithOctokit,
+  listChangedPackagePathsWithOctokit,
+  matchesWorkspaceFilePath,
+} from './version-api.js';
+export type { RepoVersionContext } from './version-api.js';
 export { aggregateReleaseLogs } from './changelog-aggregator.js';
 
 // Utils

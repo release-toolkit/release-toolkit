@@ -1,6 +1,13 @@
+import type { ReleasePreviewConfig } from '../../shared/config/index.js';
 import type { VersionDiffResult } from '../../shared/types.js';
 import type { ChangelogFormatter } from '../../shared/plugins/types.js';
 import { applyFormatters, parseChangelog } from '../../shared/plugins/index.js';
+
+const DEFAULT_PREVIEW_OUTPUT = {
+  showVersionDiff: true,
+  showPackageList: true,
+  showChangelog: true,
+} as const;
 
 /**
  * 格式化 Release Preview 评论
@@ -14,7 +21,9 @@ export function formatReleasePreviewComment(
   noChangeMessage: string,
   formatters: ChangelogFormatter[] = [],
   isMerged: boolean = false,
+  previewOutput?: ReleasePreviewConfig['previewOutput'],
 ): string {
+  const output = { ...DEFAULT_PREVIEW_OUTPUT, ...previewOutput };
   const today = new Date().toISOString().split('T')[0];
   const lines: string[] = [];
 
@@ -43,26 +52,42 @@ export function formatReleasePreviewComment(
   if (!hasVersionChange) {
     lines.push(noChangeMessage);
   } else {
-    lines.push('### 版本变更');
-    lines.push('');
-    lines.push('| 包名 | 旧版本 | 新版本 | 变更类型 |');
-    lines.push('| ------ | -------- | -------- | -------- |');
+    if (output.showVersionDiff) {
+      lines.push('### 版本变更');
+      lines.push('');
+      lines.push('| 包名 | 旧版本 | 新版本 | 变更类型 |');
+      lines.push('| ------ | -------- | -------- | -------- |');
 
-    for (const d of versionDiffs) {
-      const diffType = d.diffType ?? '未知';
-      lines.push(`| ${d.package.packageName} | ${d.package.currentVersion} | ${d.package.newVersion} | ${diffType} |`);
+      for (const d of versionDiffs) {
+        const diffType = d.diffType ?? '未知';
+        lines.push(
+          `| ${d.package.packageName} | ${d.package.currentVersion} | ${d.package.newVersion} | ${diffType} |`,
+        );
+      }
+      lines.push('');
     }
 
-    lines.push('');
-    lines.push('### 变更日志');
-    lines.push('');
+    if (output.showPackageList) {
+      lines.push('### 变更包');
+      lines.push('');
+      for (const d of versionDiffs) {
+        lines.push(
+          `- \`${d.package.packageName}\`：${d.package.currentVersion} → ${d.package.newVersion}`,
+        );
+      }
+      lines.push('');
+    }
 
-    // 应用插件格式化
-    if (formatters.length > 0) {
-      const formattedLog = applyFormattersToAggregatedLog(aggregatedLog, formatters);
-      lines.push(formattedLog);
-    } else {
-      lines.push(aggregatedLog);
+    if (output.showChangelog && aggregatedLog.trim()) {
+      lines.push('### 变更日志');
+      lines.push('');
+
+      if (formatters.length > 0) {
+        const formattedLog = applyFormattersToAggregatedLog(aggregatedLog, formatters);
+        lines.push(formattedLog);
+      } else {
+        lines.push(aggregatedLog);
+      }
     }
   }
   lines.push('');

@@ -3,20 +3,35 @@
  *
  * 职责：
  * 1. 验证 GitHub Webhook 签名（按需）
- * 2. 监听 pull_request / pull_request_review 事件
- * 3. 与 `@release-toolkit/core` 的 CLI 输出保持一致的评论格式
- * 4. 通过 workflow_dispatch 触发 CI 完成实际发布
+ * 2. 监听 `pull_request` / `pull_request_review` / `repository_dispatch` 事件
+ * 3. 与 `@release-toolkit/core` 的 CLI 输出保持一致的评论格式（共享 `format.ts` 纯函数）
+ * 4. 通过 `workflow_dispatch` 触发 CI 完成实际发布
  *
  * 事件 → 行为：
- * - pull_request.opened/reopened/synchronize/edited（base = RELEASE_BASE_BRANCH）
+ * - pull_request.opened/reopened/synchronize/edited/ready_for_review（base = RELEASE_BASE_BRANCH）
  *     → upsert PR 评论：通知 + 版本 diff + 预览 + 修改指南
  * - pull_request_review.submitted (state=approved)
- *     → 把当前评论中的预览写入 PR 描述体（RELEASE-TOOLKIT-OUTPUT 标记区，幂等）
+ *     → 把当前评论中的预览写入 PR 描述体（`RELEASE-TOOLKIT-OUTPUT` 标记区，幂等）
  * - pull_request.closed (merged && base = RELEASE_BASE_BRANCH)
- *     → 触发 release-publish workflow（由 CI 执行 @release-toolkit/core publishRelease）
+ *     → 触发 `release-publish` workflow（由 CI 执行 @release-toolkit/core publishRelease）
+ * - repository_dispatch (event_type = release-toolkit-collect | write | publish)
+ *     → 手动重试入口；通过 `gh api .../dispatches` 触发同样的处理流程
  */
 
 import { App, Octokit, type Octokit as OctokitType } from 'octokit';
+import {
+  COMMENT_ANCHOR_START,
+  COMMENT_ANCHOR_END,
+  type OutputSections,
+  type PRContext,
+  buildPRComment,
+  buildConfirmedReleaseLog,
+  extractReleaseLog,
+  resolveOutputSections,
+  outputSectionsFromRepoConfig,
+  upsertOutputInBody,
+} from './format.js';
+import { resolvePRVersionState } from './version-resolve.js';
 
 // ============================================================================
 // 环境与常量
@@ -31,62 +46,14 @@ interface Env {
   /** 合并后触发的 workflow 文件名（默认 release-publish.yml） */
   RELEASE_PUBLISH_WORKFLOW?: string;
   /**
-   * 控制评论输出区块：JSON 字符串
-   * 例：`{"notification":true,"preview":true,"editGuide":false}`
+   * 评论输出区块回退配置（JSON）。
+   * 优先使用仓库 `.release-toolkit/config.json` → `prLogCollector.outputSections`。
    */
   OUTPUT_SECTIONS?: string;
 }
 
-interface OutputSections {
-  notification: boolean;
-  preview: boolean;
-  editGuide: boolean;
-}
-
-const DEFAULT_OUTPUT_SECTIONS: OutputSections = {
-  notification: true,
-  preview: true,
-  editGuide: true,
-};
-
-function resolveOutputSections(env: Env): OutputSections {
-  if (!env.OUTPUT_SECTIONS) return { ...DEFAULT_OUTPUT_SECTIONS };
-  try {
-    const parsed = JSON.parse(env.OUTPUT_SECTIONS) as Partial<OutputSections>;
-    return {
-      notification: parsed.notification ?? DEFAULT_OUTPUT_SECTIONS.notification,
-      preview: parsed.preview ?? DEFAULT_OUTPUT_SECTIONS.preview,
-      editGuide: parsed.editGuide ?? DEFAULT_OUTPUT_SECTIONS.editGuide,
-    };
-  } catch (err) {
-    console.warn('[outputSections] 无法解析 OUTPUT_SECTIONS，使用默认值:', err);
-    return { ...DEFAULT_OUTPUT_SECTIONS };
-  }
-}
-
 const DEFAULT_BASE_BRANCH = 'dev';
 const DEFAULT_PUBLISH_WORKFLOW = 'release-publish.yml';
-
-const RELEASE_LOG_START = '<!-- RELEASE-LOG-START -->';
-const RELEASE_LOG_END = '<!-- RELEASE-LOG-END -->';
-const OUTPUT_START = '<!-- RELEASE-TOOLKIT-OUTPUT-START -->';
-const OUTPUT_END = '<!-- RELEASE-TOOLKIT-OUTPUT-END -->';
-const COMMENT_ANCHOR_START = '<!-- release-toolkit-comment-start -->';
-const COMMENT_ANCHOR_END = '<!-- release-toolkit-comment-end -->';
-
-const COMMIT_TYPE_EMOJI: Record<string, string> = {
-  feat: '✨',
-  fix: '🐛',
-  docs: '📝',
-  style: '💄',
-  refactor: '♻️',
-  perf: '⚡️',
-  test: '✅',
-  build: '📦️',
-  ci: '👷',
-  chore: '🔧',
-  revert: '⏪️',
-};
 
 // ============================================================================
 // 类型定义
@@ -119,141 +86,27 @@ interface PullRequestPayload {
   };
 }
 
-interface PackageChangeLog {
-  packages: string[];
-  changeLog: string;
-}
-
-interface VersionDiff {
-  packageName: string;
-  currentVersion: string;
-  newVersion: string;
-}
-
-interface PRContext {
-  owner: string;
-  repo: string;
-  prNumber: number;
-  prTitle: string;
-  prBody: string | null;
-  baseRef: string;
-  headRef: string;
-  headSha: string;
-}
-
-// ============================================================================
-// 工具函数（纯字符串处理，与 core 行为对齐）
-// ============================================================================
-
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function applyEmojiPrefix(line: string): string {
-  const match = line.match(/^-?\s*(\w+)(?:\([^)]+\))?:/);
-  if (match) {
-    const emoji = COMMIT_TYPE_EMOJI[match[1]];
-    if (emoji && !line.includes(emoji)) {
-      return line.replace(match[0], `${emoji} ${match[0]}`);
-    }
-  }
-  return line;
-}
-
-/** 将一段文本拆成 bullet 列表，已以 `-` 开头的行不重复添加前缀 */
-function toBulletLines(text: string): string[] {
-  const lines: string[] = [];
-  for (const raw of text.split('\n')) {
-    const trimmed = raw.trim();
-    if (!trimmed) continue;
-    lines.push(trimmed.startsWith('-') ? trimmed : `- ${trimmed}`);
-  }
-  return lines;
-}
-
-function formatTitleBullet(title: string): string {
-  return applyEmojiPrefix(`- ${title}（标题）`);
-}
-
-function formatChangeLogBullets(changeLog: string): string[] {
-  const trimmed = changeLog.trim();
-  if (!trimmed) {
-    return ['- （无对应的变更日志）'];
-  }
-  return toBulletLines(trimmed).map(applyEmojiPrefix);
-}
-
 /**
- * 解析 RELEASE-LOG 标记区，识别 `## pkg-a, pkg-b` 分组
+ * GitHub `repository_dispatch` 事件 payload
  *
- * 支持两种用户写法：
- * - `## pkg`（紧跟一个或多个普通行 / `### 子标题` 的列表）
- * - 无 `##` 的纯列表（作为"通用变更"）
+ * 用法（CLI / curl）：
+ *   gh api repos/<owner>/<repo>/dispatches \
+ *     -F event_type=release-toolkit-collect \
+ *     -F 'client_payload[pr_number]=123'
  */
-function parseReleaseLog(content: string): PackageChangeLog[] {
-  const trimmed = content.trim();
-  if (!trimmed) return [];
-
-  const lines = trimmed.split('\n');
-  const result: PackageChangeLog[] = [];
-  let currentPackages: string[] = [];
-  let currentLines: string[] = [];
-  let started = false;
-
-  const flush = () => {
-    const log = currentLines.join('\n').trim();
-    if (!log) return;
-    result.push({ packages: [...currentPackages], changeLog: log });
+interface RepositoryDispatchPayload {
+  action?: string;
+  event_type?: string;
+  client_payload?: {
+    pr_number?: number | string;
+    action?: 'collect' | 'write' | 'publish';
   };
-
-  for (const line of lines) {
-    const t = line.trim();
-    if (t.startsWith('## ') && !t.startsWith('### ')) {
-      if (started) flush();
-      currentPackages = t
-        .replace(/^## /, '')
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
-      currentLines = [];
-      started = true;
-      continue;
-    }
-    if (t.startsWith('### ')) {
-      // 兼容旧格式：跳过 `### 标题` / `### 变更日志` 这类副标题
-      continue;
-    }
-    if (started) {
-      currentLines.push(line);
-    } else {
-      // 处于第一个 `##` 之前的内容 → 视为通用变更
-      currentLines.push(line);
-    }
-  }
-  if (started) {
-    flush();
-  } else if (currentLines.join('\n').trim()) {
-    result.push({ packages: [], changeLog: currentLines.join('\n').trim() });
-  }
-  return result;
-}
-
-interface ExtractedReleaseLog {
-  rawReleaseLog: string | null;
-  packageChangeLogs: PackageChangeLog[];
-}
-
-function extractReleaseLog(body: string | null): ExtractedReleaseLog {
-  if (!body) return { rawReleaseLog: null, packageChangeLogs: [] };
-  const startIdx = body.indexOf(RELEASE_LOG_START);
-  const endIdx = body.indexOf(RELEASE_LOG_END);
-  if (startIdx === -1 || endIdx === -1 || startIdx >= endIdx) {
-    return { rawReleaseLog: null, packageChangeLogs: [] };
-  }
-  const raw = body.substring(startIdx + RELEASE_LOG_START.length, endIdx).trim();
-  return {
-    rawReleaseLog: raw || null,
-    packageChangeLogs: parseReleaseLog(raw),
+  repository?: {
+    owner?: { login?: string };
+    name?: string;
+  };
+  installation?: {
+    id?: number;
   };
 }
 
@@ -268,76 +121,6 @@ async function getPR(octokit: OctokitType, ctx: { owner: string; repo: string; p
     pull_number: ctx.prNumber,
   });
   return data;
-}
-
-async function listChangedPackages(
-  octokit: OctokitType,
-  ctx: { owner: string; repo: string; prNumber: number },
-): Promise<string[]> {
-  const pkgs = new Set<string>();
-  // 单次请求最多 100 个文件；按页迭代
-  for await (const { data } of octokit.paginate.iterator(octokit.rest.pulls.listFiles, {
-    owner: ctx.owner,
-    repo: ctx.repo,
-    pull_number: ctx.prNumber,
-    per_page: 100,
-  })) {
-    for (const f of data) {
-      const m = f.filename.match(/^packages\/([^/]+)\/package\.json$/);
-      if (m) pkgs.add(m[1]);
-    }
-  }
-  return Array.from(pkgs);
-}
-
-async function getPackageJsonAtRef(
-  octokit: OctokitType,
-  owner: string,
-  repo: string,
-  pkgDir: string,
-  ref: string,
-): Promise<{ name?: string; version?: string } | null> {
-  try {
-    const { data } = await octokit.rest.repos.getContent({
-      owner,
-      repo,
-      path: `packages/${pkgDir}/package.json`,
-      ref,
-    });
-    if (Array.isArray(data) || data.type !== 'file' || !('content' in data)) return null;
-    const decoded = atob(data.content.replace(/\n/g, ''));
-    const parsed = JSON.parse(decoded) as { name?: string; version?: string };
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-async function collectVersionDiffs(
-  octokit: OctokitType,
-  owner: string,
-  repo: string,
-  changedPkgs: string[],
-  baseRef: string,
-  headSha: string,
-): Promise<VersionDiff[]> {
-  const diffs: VersionDiff[] = [];
-  for (const dir of changedPkgs) {
-    const [basePkg, headPkg] = await Promise.all([
-      getPackageJsonAtRef(octokit, owner, repo, dir, baseRef),
-      getPackageJsonAtRef(octokit, owner, repo, dir, headSha),
-    ]);
-    if (!headPkg?.version) continue;
-    const current = basePkg?.version ?? '—';
-    const next = headPkg.version;
-    if (current === next) continue;
-    diffs.push({
-      packageName: headPkg.name ?? dir,
-      currentVersion: current,
-      newVersion: next,
-    });
-  }
-  return diffs;
 }
 
 async function findToolComment(
@@ -417,194 +200,6 @@ async function dispatchWorkflow(
 }
 
 // ============================================================================
-// 评论 / 描述体内容构建
-// ============================================================================
-
-function renderVersionDiffTable(diffs: VersionDiff[]): string {
-  if (diffs.length === 0) return '_（无版本变更）_';
-  const lines: string[] = [];
-  lines.push('| 包名 | 当前版本 | 新版本 |');
-  lines.push('| --- | --- | --- |');
-  for (const d of diffs) {
-    lines.push(`| \`${d.packageName}\` | ${d.currentVersion} | ${d.newVersion} |`);
-  }
-  return lines.join('\n');
-}
-
-function renderPackageSection(
-  packageDir: string,
-  packageDisplayName: string,
-  prTitle: string,
-  changeLog: string,
-): string {
-  const lines: string[] = [];
-  const heading = packageDisplayName === packageDir
-    ? `## ${packageDir}`
-    : `## ${packageDisplayName}`;
-  lines.push(heading);
-  lines.push('');
-  lines.push(formatTitleBullet(prTitle));
-  for (const b of formatChangeLogBullets(changeLog)) {
-    lines.push(b);
-  }
-  return lines.join('\n');
-}
-
-function buildPreviewMarkdown(
-  prCtx: PRContext,
-  changedPackages: string[],
-  versionDiffs: VersionDiff[],
-  parsedLogs: PackageChangeLog[],
-): string {
-  const lines: string[] = [];
-
-  // 标题
-  lines.push(`# PR #${prCtx.prNumber} 变更日志`);
-  lines.push('');
-
-  // 变更包列表
-  lines.push('## 变更包列表：');
-  lines.push('');
-  if (changedPackages.length === 0) {
-    lines.push('（无变更包）');
-  } else {
-    for (const pkg of changedPackages) {
-      const diff = versionDiffs.find((d) => d.packageName === pkg || d.packageName.endsWith(`/${pkg}`));
-      lines.push(
-        diff
-          ? `- \`${diff.packageName}\`：${diff.currentVersion} → ${diff.newVersion}`
-          : `- \`${pkg}\``,
-      );
-    }
-  }
-  lines.push('');
-
-  // 计算 pkg → log 映射
-  const logMap = new Map<string, string>();
-  for (const { packages, changeLog } of parsedLogs) {
-    if (packages.length === 0) {
-      for (const pkg of changedPackages) logMap.set(pkg, changeLog);
-    } else {
-      for (const pkg of packages) logMap.set(pkg, changeLog);
-    }
-  }
-
-  // 每个包的章节
-  const targets = changedPackages.length > 0 ? changedPackages : ['__default__'];
-  for (const pkg of targets) {
-    const displayName =
-      pkg === '__default__'
-        ? '变更内容'
-        : versionDiffs.find((d) => d.packageName === pkg || d.packageName.endsWith(`/${pkg}`))?.packageName ?? pkg;
-    lines.push(renderPackageSection(pkg, displayName, prCtx.prTitle, logMap.get(pkg) ?? ''));
-    lines.push('');
-  }
-
-  return lines.join('\n').trim();
-}
-
-function buildEditGuide(): string {
-  return `<details>
-<summary>✏️ 如何修改变更日志</summary>
-
-在 **PR 描述体** 中追加以下标记区（替换为你的真实内容）：
-
-\`\`\`
-${RELEASE_LOG_START}
-## package-a
-- feat: 自定义标题（标题）
-- 新增功能说明
-- 修复内容说明
-
-## package-b
-- 此处可省略标题，工具会自动使用 PR 标题
-\`\`\`
-
-> 若无 \`## 包名\` 分组，工具会把列表视为所有变更包的通用日志。
-</details>`;
-}
-
-function buildPRComment(input: {
-  prCtx: PRContext;
-  changedPackages: string[];
-  versionDiffs: VersionDiff[];
-  parsedLogs: PackageChangeLog[];
-  sections: OutputSections;
-  approved?: boolean;
-}): string {
-  const { prCtx, changedPackages, versionDiffs, parsedLogs, sections, approved } = input;
-  const parts: string[] = [];
-
-  if (sections.notification) {
-    const status = approved ? '✅ **PR 已批准** —— 日志将写入 PR 描述体' : '📢 **PR 待审批**';
-    parts.push(status);
-    parts.push('');
-    parts.push('### 变更包版本');
-    parts.push('');
-    parts.push(renderVersionDiffTable(versionDiffs));
-  }
-
-  if (sections.preview) {
-    if (parts.length > 0) {
-      parts.push('');
-      parts.push('---');
-      parts.push('');
-    }
-    parts.push(buildPreviewMarkdown(prCtx, changedPackages, versionDiffs, parsedLogs));
-  }
-
-  if (sections.editGuide) {
-    if (parts.length > 0) {
-      parts.push('');
-      parts.push('---');
-      parts.push('');
-    }
-    parts.push(buildEditGuide());
-  }
-
-  if (parts.length === 0) {
-    parts.push('_release-toolkit: 所有输出区块均已关闭_');
-  }
-
-  return parts.join('\n');
-}
-
-function buildConfirmedReleaseLog(
-  prCtx: PRContext,
-  changedPackages: string[],
-  versionDiffs: VersionDiff[],
-  parsedLogs: PackageChangeLog[],
-): string {
-  return [
-    `# PR #${prCtx.prNumber} 变更日志（已确认）`,
-    '',
-    '> ✅ 此日志已通过 Review 确认，将用于发布 Release Notes',
-    '',
-    renderVersionDiffTable(versionDiffs),
-    '',
-    '---',
-    '',
-    buildPreviewMarkdown(prCtx, changedPackages, versionDiffs, parsedLogs),
-  ].join('\n');
-}
-
-function wrapOutputMarkers(content: string): string {
-  return `${OUTPUT_START}\n${content}\n${OUTPUT_END}`;
-}
-
-function upsertOutputInBody(currentBody: string | null, content: string): string {
-  const body = currentBody ?? '';
-  const wrapped = wrapOutputMarkers(content);
-  if (body.includes(OUTPUT_START) && body.includes(OUTPUT_END)) {
-    return body.replace(
-      new RegExp(`${escapeRegex(OUTPUT_START)}[\\s\\S]*?${escapeRegex(OUTPUT_END)}`),
-      wrapped,
-    );
-  }
-  return body.trim() ? `${body}\n\n${wrapped}` : wrapped;
-}
-
-// ============================================================================
 // 业务流程
 // ============================================================================
 
@@ -627,6 +222,50 @@ async function buildPRContext(
   };
 }
 
+const CONFIG_PATH = '.release-toolkit/config.json';
+
+/** 从仓库默认分支或指定 ref 读取 config.json */
+async function fetchRepoToolkitConfig(
+  octokit: OctokitType,
+  owner: string,
+  repo: string,
+  ref: string,
+): Promise<Record<string, unknown> | null> {
+  try {
+    const { data } = await octokit.rest.repos.getContent({
+      owner,
+      repo,
+      path: CONFIG_PATH,
+      ref,
+    });
+    if (Array.isArray(data) || data.type !== 'file' || !('content' in data)) return null;
+    const decoded = atob(data.content.replace(/\n/g, ''));
+    return JSON.parse(decoded) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 解析评论输出区块：
+ * 1. 优先读取 PR head 上 `.release-toolkit/config.json` 的 `prLogCollector.outputSections`
+ * 2. 回退到 `OUTPUT_SECTIONS` 环境变量
+ * 3. 最后使用默认值
+ */
+async function resolveOutputSectionsForPR(
+  octokit: OctokitType,
+  prCtx: PRContext,
+  env: Env,
+): Promise<OutputSections> {
+  const ref = prCtx.headSha || prCtx.headRef;
+  if (ref) {
+    const config = await fetchRepoToolkitConfig(octokit, prCtx.owner, prCtx.repo, ref);
+    const fromRepo = outputSectionsFromRepoConfig(config);
+    if (fromRepo) return fromRepo;
+  }
+  return resolveOutputSections(env.OUTPUT_SECTIONS);
+}
+
 async function runCollect(
   octokit: OctokitType,
   prCtx: PRContext,
@@ -634,14 +273,14 @@ async function runCollect(
   approved = false,
 ): Promise<{ ok: boolean; commentBody?: string; error?: string }> {
   try {
-    const changedPackages = await listChangedPackages(octokit, prCtx);
-    const versionDiffs = await collectVersionDiffs(
+    const ref = prCtx.headSha || prCtx.headRef;
+    const repoConfig = ref
+      ? await fetchRepoToolkitConfig(octokit, prCtx.owner, prCtx.repo, ref)
+      : null;
+    const { changedPackages, versionDiffs } = await resolvePRVersionState(
       octokit,
-      prCtx.owner,
-      prCtx.repo,
-      changedPackages,
-      prCtx.baseRef,
-      prCtx.headSha,
+      prCtx,
+      repoConfig,
     );
     const { packageChangeLogs } = extractReleaseLog(prCtx.prBody);
     const commentBody = buildPRComment({
@@ -666,14 +305,14 @@ async function runConfirmAndWriteToBody(
   sections: OutputSections,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    const changedPackages = await listChangedPackages(octokit, prCtx);
-    const versionDiffs = await collectVersionDiffs(
+    const ref = prCtx.headSha || prCtx.headRef;
+    const repoConfig = ref
+      ? await fetchRepoToolkitConfig(octokit, prCtx.owner, prCtx.repo, ref)
+      : null;
+    const { changedPackages, versionDiffs } = await resolvePRVersionState(
       octokit,
-      prCtx.owner,
-      prCtx.repo,
-      changedPackages,
-      prCtx.baseRef,
-      prCtx.headSha,
+      prCtx,
+      repoConfig,
     );
     const { packageChangeLogs } = extractReleaseLog(prCtx.prBody);
     const confirmedLog = buildConfirmedReleaseLog(prCtx, changedPackages, versionDiffs, packageChangeLogs);
@@ -776,12 +415,105 @@ async function handlePullRequest(
     action === 'edited' ||
     action === 'ready_for_review'
   ) {
-    const sections = resolveOutputSections(env);
+    const sections = await resolveOutputSectionsForPR(octokit, prCtx, env);
     const result = await runCollect(octokit, prCtx, sections);
     return jsonResponse({ success: result.ok, action: 'prLogCollector', error: result.error });
   }
 
   return jsonResponse({ success: true, action: action ?? 'unknown', status: 'ignored' });
+}
+
+/**
+ * 处理 `repository_dispatch` 事件 —— 手动重试入口
+ *
+ * 当 webhook 错过 / 失败时，可以通过
+ * `gh api repos/<owner>/<repo>/dispatches -F event_type=release-toolkit-collect ...`
+ * 主动触发同样的处理流程。
+ */
+async function handleRepositoryDispatch(
+  payload: RepositoryDispatchPayload,
+  octokit: OctokitType,
+  env: Env,
+): Promise<Response> {
+  const eventType = payload.event_type ?? '';
+  const clientPayload = payload.client_payload ?? {};
+  const inferredAction =
+    eventType === 'release-toolkit-collect'
+      ? 'collect'
+      : eventType === 'release-toolkit-write'
+        ? 'write'
+        : eventType === 'release-toolkit-publish'
+          ? 'publish'
+          : clientPayload.action;
+
+  if (!inferredAction) {
+    return jsonResponse({
+      success: true,
+      status: 'ignored',
+      reason: `unknown event_type: ${eventType}`,
+    });
+  }
+
+  const owner = payload.repository?.owner?.login ?? '';
+  const repo = payload.repository?.name ?? '';
+  if (!owner || !repo) {
+    return jsonResponse({ success: false, error: 'missing repo in payload' }, 400);
+  }
+
+  const prNumber =
+    typeof clientPayload.pr_number === 'string'
+      ? Number.parseInt(clientPayload.pr_number, 10)
+      : clientPayload.pr_number;
+
+  if (inferredAction !== 'publish' && (!prNumber || Number.isNaN(prNumber))) {
+    return jsonResponse(
+      { success: false, error: 'client_payload.pr_number is required for collect/write' },
+      400,
+    );
+  }
+
+  if (inferredAction === 'publish') {
+    const workflowFile = env.RELEASE_PUBLISH_WORKFLOW || DEFAULT_PUBLISH_WORKFLOW;
+    const dispatched = await dispatchWorkflow(
+      octokit,
+      { owner, repo },
+      workflowFile,
+      expectedBaseBranch(env),
+      {
+        pr_number: prNumber ? String(prNumber) : '',
+        pr_title: '',
+      },
+    );
+    return jsonResponse({
+      success: dispatched,
+      action: 'releasePublisher',
+      workflow: workflowFile,
+    });
+  }
+
+  const prCtx = await buildPRContext(octokit, owner, repo, prNumber!);
+  const expected = expectedBaseBranch(env);
+  if (prCtx.baseRef !== expected) {
+    return jsonResponse({
+      success: true,
+      status: 'skipped',
+      reason: `base ${prCtx.baseRef} ≠ ${expected}`,
+    });
+  }
+
+  const sections = await resolveOutputSectionsForPR(octokit, prCtx, env);
+
+  if (inferredAction === 'collect') {
+    const result = await runCollect(octokit, prCtx, sections);
+    return jsonResponse({ success: result.ok, action: 'prLogCollector', error: result.error });
+  }
+
+  if (inferredAction === 'write') {
+    const result = await runConfirmAndWriteToBody(octokit, prCtx, sections);
+    return jsonResponse({ success: result.ok, action: 'logWrite', error: result.error });
+  }
+
+  return jsonResponse({ success: true, status: 'ignored', reason: 'unrecognized action' });
 }
 
 async function handlePullRequestReview(
@@ -808,7 +540,7 @@ async function handlePullRequestReview(
     return jsonResponse({ success: false, error: 'missing repo in payload' }, 400);
   }
   const prCtx = await buildPRContext(octokit, owner, repo, pr.number);
-  const sections = resolveOutputSections(env);
+  const sections = await resolveOutputSectionsForPR(octokit, prCtx, env);
   const result = await runConfirmAndWriteToBody(octokit, prCtx, sections);
   return jsonResponse({ success: result.ok, action: 'logWrite', error: result.error });
 }
@@ -879,9 +611,9 @@ export default {
       if (!ok) return jsonResponse({ success: false, error: 'Invalid signature' }, 401);
     }
 
-    let payload: PullRequestPayload;
+    let payload: PullRequestPayload & RepositoryDispatchPayload;
     try {
-      payload = JSON.parse(body) as PullRequestPayload;
+      payload = JSON.parse(body) as PullRequestPayload & RepositoryDispatchPayload;
     } catch {
       return jsonResponse({ success: false, error: 'Invalid JSON' }, 400);
     }
@@ -897,6 +629,8 @@ export default {
           return await handlePullRequest(payload, octokit, env);
         case 'pull_request_review':
           return await handlePullRequestReview(payload, octokit, env);
+        case 'repository_dispatch':
+          return await handleRepositoryDispatch(payload, octokit, env);
         case 'ping':
           return jsonResponse({ success: true, status: 'pong' });
         default:

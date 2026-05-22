@@ -10,9 +10,9 @@
 | 配置继承 | 🔲 规划中 | 多配置文件继承机制 |
 | `ChangelogFormatter` | ✅ 已实现 | 日志格式化器接口 |
 | `loadPlugins` / `applyFormatters` | ✅ 已实现 | 插件加载和应用 |
-| `IPlugin` 通用插件接口 | 🔲 规划中 | 扩展生命周期钩子的插件接口 |
-| `ILogParser` 自定义日志解析 | 🔲 规划中 | 替换默认 changelog 解析逻辑 |
-| `ILineFormatter` / `ILogFormatter` | 🔲 规划中 | 更细粒度的日志格式化接口 |
+| `IPlugin` 通用插件接口 | ⚠️ 类型已就位 | `loadPluginsAsIPlugin` + `HookRunner` 已接通；内置 preset 未实现生命周期钩子 |
+| `ILogParser` 自定义日志解析 | ⚠️ 类型已就位 | `loadLogParser` 可加载；默认解析仍走 `parseChangelog` |
+| `ILineFormatter` / `ILogFormatter` | ⚠️ 类型已就位 | 已在 `shared/types.ts` 定义，loader 兼容 |
 
 ---
 
@@ -28,15 +28,19 @@
 |--------|--------|------|------|
 | `branches.base` | `"dev"` | ✅ | 目标分支（PR 日志收集、版本预览与发布共用） |
 | `prLogCollector.releaseLogMarker` | `<!-- RELEASE-LOG-START/END -->` | ✅ | PR 日志标记 |
-| `prLogCollector.outputSections` | 全部启用 | ⚠️ App Server 通过 `OUTPUT_SECTIONS` env 读取 | 控制评论的 notification / preview / editGuide 三段输出 |
-| `releasePreview.workspaceFile` | `"pnpm-workspace.yaml"` | ✅ | Monorepo 配置文件 |
+| `prLogCollector.outputSections` | 全部启用 | ✅ | App Server 优先读仓库 `.release-toolkit/config.json`；`OUTPUT_SECTIONS` env 为回退 |
+| `prLogCollector.logExtraction` | `source: "comment"` | ✅ | `comment` 从 PR 评论读取标记区；`pr-body` 仅读描述体；找不到时回退 body |
+| `releasePreview.workspaceFile` | `"pnpm-workspace.yaml"` | ✅ | Monorepo 配置文件；Worker/API 模式从 GitHub 读取该文件解析 `packages` |
 | `releasePreview.noChangeMessage` | 内置中文提示 | ✅ | 无版本变更时的提示 |
+| `releasePreview.previewOutput` | 全部 `true` | ✅ | 控制预览评论中版本表 / 包列表 / changelog 显隐 |
 | `releasePublisher.createGithubRelease` | `true` | ✅ | 是否创建 GitHub Release |
-| `releasePublisher.gitTags` | 内置格式 | 🔲 规划中 | Git Tag 格式配置 |
-| `releasePublisher.afterRelease` | - | 🔲 规划中 | 发布后钩子 |
+| `releasePublisher.gitTags` | `{packageName}@{version}` | ✅ | Tag 名与 annotated message 模板，支持 `{packageName}`、`{version}` |
+| `releasePublisher.beforeTag` | `[]` | ✅ | 创建 Tag 前的钩子；失败写入 `errors` 并 `console.warn` |
+| `releasePublisher.afterRelease` | `[]` | ✅ | 发布后钩子；失败汇总到 `publishRelease().errors` |
+| `releasePublisher.afterRelease.type=webhook/slack/discord` | - | ✅ | 扁平 `type` 或 `LifecycleHook`（`run` + `webhook` / `notify`）均可 |
 | `plugins` | 默认插件列表 | ✅ | 自定义格式化器插件 |
 
-> ✅ = 已在代码中实现 | 🔲 = 文档定义，待实现
+> ✅ = 已实现 ｜ ⚠️ = 部分实现/有约束 ｜ 🔲 = 文档定义，待实现
 
 ---
 
@@ -108,10 +112,22 @@
 
 ---
 
+## CLI 指定配置路径
+
+```bash
+release collect --pr-number 1 --owner org --repo repo --config-path ./my-config.json
+release preview --pr-number 1 --owner org --repo repo --config-path ./my-config.json
+release publish --config-path ./my-config.json
+```
+
+`--config-path` 可为相对 `--cwd` 或绝对路径；未指定时默认 `<cwd>/.release-toolkit/config.json`。
+
+---
+
 ## 配置加载流程
 
 ```
-1. 读取 .release-toolkit/config.json
+1. 读取 .release-toolkit/config.json（或 --config-path）
 2. 合并默认配置 (DEFAULT_CONFIG)
 3. 验证配置项
 4. 加载插件配置
@@ -120,15 +136,32 @@
 
 ---
 
-## afterRelease 钩子类型 (规划中 🔲)
+## afterRelease / beforeTag 钩子类型
+
+支持两种写法，可混用：
+
+**扁平格式（`AfterReleaseHook`）**
 
 | 类型 | 说明 | 配置 |
 |------|------|------|
-| `npm-publish` | 发布到 npm registry | `command` |
-| `webhook` | 发送 HTTP 请求 | `url`, `method`, `headers`, `body` |
-| `custom` | 执行自定义命令 | `command` |
-| `slack` | 发送 Slack 通知 | `channel`, `message` |
-| `discord` | 发送 Discord 通知 | `webhookUrl`, `message` |
+| `command` / `npm-publish` / `custom` | Shell 命令 | `command` |
+| `script` | 项目脚本 | `script` |
+| `package` | npm 包入口 | `name`, `args` |
+| `webhook` | HTTP 请求 | `url`, `method`, `headers`, `body`（支持 `{{tagName}}` 等占位符） |
+| `slack` | Slack Incoming Webhook | `webhookUrl` 或 env `SLACK_WEBHOOK_URL`，`channel`, `message` |
+| `discord` | Discord Webhook | `webhookUrl`, `discordMessage` 或 `message` |
+
+**LifecycleHook 格式（一次配置多步执行）**
+
+```json
+{
+  "run": { "type": "command", "command": "pnpm -r publish" },
+  "webhook": { "url": "https://cdn.example.com/invalidate" },
+  "notify": { "type": "slack", "webhookUrl": "https://hooks.slack.com/...", "message": "已发布 {{tagName}}" }
+}
+```
+
+展开后按顺序执行：`run` → `webhook` → `notify`。
 
 ---
 
@@ -170,10 +203,10 @@
 | 接口 | 状态 | 说明 |
 |------|------|------|
 | `ChangelogFormatter` | ✅ 已实现 | 日志格式化器（当前唯一支持的插件接口） |
-| `IPlugin` | 🔲 规划中 | 通用插件接口，支持生命周期钩子 |
-| `ILogParser` | 🔲 规划中 | 自定义日志解析器 |
-| `ILineFormatter` | 🔲 规划中 | 单行格式化接口（比 `formatLine` 更细粒度） |
-| `ILogFormatter` | 🔲 规划中 | 整体日志格式化接口（比 `format` 更细粒度） |
+| `IPlugin` | ⚠️ 类型已就位 | 通用插件接口，支持生命周期钩子（内置 preset 未实现） |
+| `ILogParser` | ⚠️ 类型已就位 | 自定义日志解析器，loader 支持 `loadLogParser` |
+| `ILineFormatter` | ⚠️ 类型已就位 | 单行格式化接口（emoji-prefix / markdown-bold 均为该类型） |
+| `ILogFormatter` | ⚠️ 类型已就位 | 整体日志格式化接口 |
 
 ---
 
@@ -197,7 +230,7 @@ interface ChangelogFormatter {
 
 ---
 
-## IPlugin 通用插件接口 (规划中 🔲)
+## IPlugin 通用插件接口
 
 ```typescript
 interface IPlugin {
@@ -216,7 +249,7 @@ interface IPlugin {
   format?: (entries: ChangelogEntry[]) => string;
   formatLine?: (line: string) => string;
 
-  // 自定义日志解析（规划中）
+  // 自定义日志解析（loader 已支持，preset 暂未实现）
   parseLog?: (text: string) => ChangelogEntry[];
 }
 ```
@@ -236,7 +269,7 @@ releasePublisher:
 
 ---
 
-## ILogParser 自定义日志解析 (规划中 🔲)
+## ILogParser 自定义日志解析
 
 ```typescript
 interface ILogParser {
@@ -254,7 +287,7 @@ interface ILogParser {
 
 ---
 
-## ILineFormatter / ILogFormatter (规划中 🔲)
+## ILineFormatter / ILogFormatter
 
 ```typescript
 /** 单行格式化接口 */

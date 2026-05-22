@@ -1,6 +1,8 @@
 /**
- * Octokit GitHub API 客户端
- * 用于在 Cloudflare Worker 环境中调用 GitHub REST API
+ * Cloudflare Worker 兼容的 GitHub REST 轻量客户端
+ *
+ * 仅服务于 `release-publisher/tag-manager.ts` 在 Worker 环境创建 tag 的场景。
+ * 其它 GitHub API 调用请使用 `shared/github/api-client.ts`（基于官方 octokit）。
  */
 
 const BASE_URL = 'https://api.github.com';
@@ -11,13 +13,12 @@ export interface OctokitOptions {
   repo: string;
 }
 
-export interface APIResponse<T> {
-  data: T;
-  status?: number;
-}
-
 /**
  * 发送 GitHub API 请求
+ *
+ * 修复要点：
+ * - URL 必须以 `/repos/{owner}/{repo}/...` 开头，旧实现漏了 `/repos/` 段会 404
+ * - 默认 GitHub REST 返回 JSON 本体（数组或对象），不要再封一层 `{ data }`
  */
 async function request<T>(
   endpoint: string,
@@ -25,7 +26,7 @@ async function request<T>(
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'GET',
   body?: unknown,
 ): Promise<T> {
-  const url = `${BASE_URL}/${options.owner}/${options.repo}/${endpoint}`;
+  const url = `${BASE_URL}/repos/${options.owner}/${options.repo}/${endpoint}`;
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${options.token}`,
@@ -51,228 +52,69 @@ async function request<T>(
     throw new Error(`GitHub API error: ${response.status} ${text}`);
   }
 
-  return response.json() as T;
+  return (await response.json()) as T;
 }
 
 /**
- * 获取文件内容
- */
-export async function getFileContents(
-  options: OctokitOptions,
-  filePath: string,
-  ref?: string,
-): Promise<string> {
-  const endpoint = ref
-    ? `contents/${filePath}?ref=${ref}`
-    : `contents/${filePath}`;
-
-  const data = await request<{ content: string; encoding: string }>(
-    endpoint,
-    options,
-  );
-
-  // Base64 解码
-  if (data.encoding === 'base64') {
-    return atob(data.content);
-  }
-
-  return data.content;
-}
-
-/**
- * 获取两个 ref 之间的文件差异
- */
-export async function compareRefs(
-  options: OctokitOptions,
-  baseRef: string,
-  headRef: string,
-): Promise<Array<{ filename: string; status: string }>> {
-  const data = await request<{ files: Array<{ filename: string; status: string }> }>(
-    `compare/${baseRef}...${headRef}`,
-    options,
-  );
-
-  return data.files.map((f) => ({
-    filename: f.filename,
-    status: f.status,
-  }));
-}
-
-/**
- * 创建 Git Tag
+ * 创建 annotated Git Tag
+ *
+ * 返回 tag 对象的 sha（与 commit sha 不同）。
+ * GitHub 要求随后通过 `git/refs` 创建 `refs/tags/{name}` 引用指向此 sha 才能生效。
  */
 export async function createTag(
   options: OctokitOptions,
   tagName: string,
   message: string,
-  sha: string,
+  commitSha: string,
   tagType: 'commit' | 'tree' | 'blob' = 'commit',
-): Promise<{ name: string }> {
-  const data = await request<{ name: string }>(
+): Promise<{ sha: string; tag: string }> {
+  return request<{ sha: string; tag: string }>(
     'git/tags',
     options,
     'POST',
     {
       tag: tagName,
       message,
-      object: sha,
+      object: commitSha,
       type: tagType,
     },
   );
-
-  return data;
 }
 
 /**
- * 推送 Tag（通过创建引用）
+ * 通过 `git/refs` 创建 `refs/tags/{name}` 引用，使 tag 对外可见
+ *
+ * 修复要点：`ref` 字段必须以 `refs/` 开头，旧实现写成 `tags/${tagName}` 会 422。
  */
 export async function pushTag(
   options: OctokitOptions,
   tagName: string,
   sha: string,
 ): Promise<{ ref: string }> {
-  const data = await request<{ ref: string }>(
-    `git/refs`,
+  return request<{ ref: string }>(
+    'git/refs',
     options,
     'POST',
     {
-      ref: `tags/${tagName}`,
+      ref: `refs/tags/${tagName}`,
       sha,
     },
   );
-
-  return data;
 }
 
 /**
- * 创建 GitHub Release
- */
-export async function createRelease(
-  options: OctokitOptions,
-  tagName: string,
-  name: string,
-  body: string,
-  draft: boolean = false,
-  prerelease: boolean = false,
-): Promise<{ url: string; id: number }> {
-  const data = await request<{ url: string; id: number }>(
-    'releases',
-    options,
-    'POST',
-    {
-      tag_name: tagName,
-      name,
-      body,
-      draft,
-      prerelease,
-    },
-  );
-
-  return data;
-}
-
-/**
- * 获取 PR 的变更文件列表
- */
-export async function getPRFiles(
-  options: OctokitOptions,
-  prNumber: number,
-): Promise<Array<{ filename: string; status: string }>> {
-  const data = await request<{ data: Array<{ filename: string; status: string }> }>(
-    `pulls/${prNumber}/changed_files`,
-    options,
-  );
-
-  return data.data;
-}
-
-/**
- * 获取最新 commit SHA
+ * 获取指定 ref 的最新 commit SHA
+ *
+ * 修复要点：GitHub `commits` 端点直接返回 commit 对象数组，
+ * 旧实现期望 `{ data: [...] }` 包装会拿不到结果。
  */
 export async function getLatestCommitSha(
   options: OctokitOptions,
   ref: string = 'main',
 ): Promise<string> {
-  const data = await request<{ data: Array<{ sha: string }> }>(
-    `commits?sha=${ref}&per_page=1`,
+  const data = await request<Array<{ sha: string }>>(
+    `commits?sha=${encodeURIComponent(ref)}&per_page=1`,
     options,
   );
-
-  return data.data[0]?.sha || '';
-}
-
-/**
- * 创建 Commit Comment
- */
-export async function createCommitComment(
-  options: OctokitOptions,
-  commitSha: string,
-  body: string,
-): Promise<{ id: number }> {
-  const data = await request<{ id: number }>(
-    `commits/${commitSha}/comments`,
-    options,
-    'POST',
-    { body },
-  );
-
-  return data;
-}
-
-/**
- * 创建 Issue Comment（PR 也是 Issue）
- */
-export async function createIssueComment(
-  options: OctokitOptions,
-  issueNumber: number,
-  body: string,
-): Promise<{ id: number }> {
-  const data = await request<{ id: number }>(
-    `issues/${issueNumber}/comments`,
-    options,
-    'POST',
-    { body },
-  );
-
-  return data;
-}
-
-/**
- * 更新 Issue Comment
- */
-export async function updateIssueComment(
-  options: OctokitOptions,
-  commentId: number,
-  body: string,
-): Promise<{ id: number }> {
-  const data = await request<{ id: number }>(
-    `issues/comments/${commentId}`,
-    options,
-    'PATCH',
-    { body },
-  );
-
-  return data;
-}
-
-/**
- * 查找已有的预览评论（通过评论内容标识）
- */
-export async function findPreviewComment(
-  options: OctokitOptions,
-  issueNumber: number,
-  identifier: string,
-): Promise<number | null> {
-  const data = await request<{ data: Array<{ id: number; body: string }> }>(
-    `issues/${issueNumber}/comments`,
-    options,
-  );
-
-  for (const comment of data.data) {
-    if (comment.body.includes(identifier)) {
-      return comment.id;
-    }
-  }
-
-  return null;
+  return data[0]?.sha ?? '';
 }

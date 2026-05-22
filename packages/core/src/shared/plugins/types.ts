@@ -12,6 +12,7 @@ export type {
   ChangelogEntry,
   ChangelogFormatter,
   LoadedPlugins,
+  LoadPluginsResult,
   ReleaseHookContext,
   PRLogCollectorResult,
   ReleasePreviewResult,

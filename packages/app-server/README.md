@@ -74,7 +74,7 @@ flowchart TD
 <details><summary>✏️ 如何修改变更日志</summary>...</details>
 ```
 
-通过 `OUTPUT_SECTIONS` 环境变量可关闭任一区块。
+输出区块优先读取仓库 `.release-toolkit/config.json` 中的 `prLogCollector.outputSections`；未配置时回退到 `OUTPUT_SECTIONS` 环境变量。
 
 ## 环境变量
 
@@ -85,7 +85,7 @@ flowchart TD
 | `GITHUB_WEBHOOK_SECRET` | - | Webhook 签名密钥（缺失时跳过验证，仅供 dev） |
 | `RELEASE_BASE_BRANCH` | `dev` | 触发收集/发布的目标分支 |
 | `RELEASE_PUBLISH_WORKFLOW` | `release-publish.yml` | merge 后触发的 workflow 文件名 |
-| `OUTPUT_SECTIONS` | 全部 `true` | JSON：`{"notification":true,"preview":true,"editGuide":true}` |
+| `OUTPUT_SECTIONS` | 全部 `true` | 回退用 JSON：`{"notification":true,"preview":true,"editGuide":true}`（仓库 config 优先） |
 
 ## 部署
 

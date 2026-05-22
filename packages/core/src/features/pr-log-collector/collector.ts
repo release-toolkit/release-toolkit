@@ -4,7 +4,8 @@ import { diffFiles } from '../../shared/git/git-reader.js';
 import { loadConfig } from '../../shared/config/index.js';
 import type { GithubContext, ReleaseHookContext, PRLogCollectorResult } from '../../shared/types.js';
 import { getPR, updatePR } from '../../shared/github/api-client.js';
-import { extractReleaseLog, type PackageChangeLog } from './release-log-extractor.js';
+import { parseReleaseLogFromText, resolveReleaseLogText } from './log-source.js';
+import type { PackageChangeLog } from './release-log-extractor.js';
 import type { PRLogCollectorOptions, PRMeta } from './types.js';
 import { loadPlugins, loadPluginsAsIPlugin } from '../../shared/plugins/index.js';
 import { HookRunner } from '../../shared/hook-runner.js';
@@ -73,11 +74,17 @@ export async function collectPRLog(options: PRLogCollectorOptions): Promise<PRLo
   };
 
   try {
-    const config = loadConfig(options.cwd);
+    const config = loadConfig({
+      cwd: options.cwd,
+      configPath: options.configPath,
+    });
     const hookRunner = new HookRunner([]);
 
     // 1. 加载插件
-    const { plugins: iPlugins } = await loadPluginsAsIPlugin(config.plugins);
+    const { plugins: iPlugins, errors: pluginErrors } = await loadPluginsAsIPlugin(config.plugins);
+    if (pluginErrors.length > 0) {
+      for (const e of pluginErrors) console.warn(`[collect] ${e}`);
+    }
     hookRunner.setPlugins(iPlugins);
 
     // 2. 执行 beforeCollect 钩子
@@ -85,12 +92,16 @@ export async function collectPRLog(options: PRLogCollectorOptions): Promise<PRLo
 
     // 3. 执行核心逻辑
     const meta = await fetchPRMeta(context);
-    const { packageChangeLogs, rawReleaseLog } = extractReleaseLog(
-      meta.body,
+    const logSourceText = await resolveReleaseLogText(meta.body, context, config);
+    const { packageChangeLogs, rawReleaseLog } = parseReleaseLogFromText(
+      logSourceText,
       config,
     );
 
-    const { formatters } = await loadPlugins();
+    const { formatters, errors: formatterErrors } = await loadPlugins(config.plugins);
+    if (formatterErrors.length > 0) {
+      for (const e of formatterErrors) console.warn(`[collect] ${e}`);
+    }
     const markdown = await generateStructuredMarkdown(
       meta.number,
       meta.title,
@@ -144,13 +155,12 @@ async function generateStructuredMarkdown(
   packageChangeLogs: PackageChangeLog[],
   baseRef: string,
   headRef: string,
-  cwd?: string,
-  _formatters: Awaited<ReturnType<typeof loadPlugins>>['formatters'] = [],
+  cwd: string | undefined,
+  loadedFormatters: Awaited<ReturnType<typeof loadPlugins>>['formatters'],
   skipGitOps = false,
 ): Promise<string> {
   const base = cwd || process.cwd();
   const changedPackages = skipGitOps ? [] : await detectChangedPackages(baseRef, headRef, base);
-  const { formatters: loadedFormatters } = await loadPlugins();
 
   const lines: string[] = [];
 

@@ -29,7 +29,8 @@ src/
 | `releasePublisher` | 创建 GitHub Release + 执行钩子 |
 | `config` | 加载 `.release-toolkit/config.json` |
 | `plugins` | 插件加载与格式化器 |
-| `hook-runner` | 钩子执行器（command/script/package） |
+| `shared/hook-runner.ts` | 插件生命周期钩子调度器（`HookRunner`） |
+| `features/release-publisher/hook-runner.ts` | 发布钩子执行器（command / script / package） |
 | `github` | GitHub API 封装 |
 | `git` | Git 命令封装 |
 

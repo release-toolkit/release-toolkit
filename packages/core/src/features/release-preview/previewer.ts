@@ -1,7 +1,7 @@
 import { loadConfig } from '../../shared/config/index.js';
 import { postOrUpdateComment } from '../../shared/github/pr-commenter.js';
 import { getPullRequests } from '../../shared/github/api-client.js';
-import { scanWorkspace } from '../../shared/workspace.js';
+import { resolveWorkspacePackages } from '../../shared/workspace.js';
 import { detectVersionChanges } from '../../shared/version.js';
 import { aggregateReleaseLogs } from '../../shared/changelog-aggregator.js';
 import { loadPluginsAsIPlugin } from '../../shared/plugins/index.js';
@@ -20,6 +20,9 @@ async function aggregateReleaseLogsByAPI(baseBranch: string): Promise<string> {
   const repo = process.env.GITHUB_REPOSITORY?.split('/')[1] || '';
 
   if (!token || !owner || !repo) {
+    console.warn(
+      '[preview] 缺少 GITHUB_TOKEN / GITHUB_REPOSITORY，跳过远程聚合 release logs',
+    );
     return '';
   }
 
@@ -66,7 +69,9 @@ async function aggregateReleaseLogsByAPI(baseBranch: string): Promise<string> {
     }
 
     return releaseLogs.join('\n\n');
-  } catch {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[preview] 远程聚合 release logs 失败：${msg}`);
     return '';
   }
 }
@@ -84,11 +89,17 @@ export async function previewRelease(
   };
 
   try {
-    const config = loadConfig(options.cwd);
+    const config = loadConfig({
+      cwd: options.cwd,
+      configPath: options.configPath,
+    });
     const hookRunner = new HookRunner([]);
 
     // 1. 加载插件
-    const { plugins: iPlugins, formatters } = await loadPluginsAsIPlugin(config.plugins);
+    const { plugins: iPlugins, formatters, errors: pluginErrors } = await loadPluginsAsIPlugin(config.plugins);
+    if (pluginErrors.length > 0) {
+      for (const e of pluginErrors) console.warn(`[preview] ${e}`);
+    }
     hookRunner.setPlugins(iPlugins);
 
     // 2. 执行 beforePreview 钩子
@@ -103,23 +114,35 @@ export async function previewRelease(
     let versionDiffs: VersionDiffResult[];
     let aggregatedLog: string;
 
+    const headRef = IS_WORKER
+      ? process.env.GITHUB_HEAD_REF_NAME || process.env.GITHUB_SHA || 'HEAD'
+      : 'HEAD';
+
+    const workspacePatterns = await resolveWorkspacePackages(
+      config.releasePreview.workspaceFile,
+      IS_WORKER
+        ? {
+            headRef,
+            api: {
+              owner: options.owner,
+              repo: options.repo,
+              ref: headRef,
+              token: options.token,
+            },
+          }
+        : { cwd: options.cwd },
+    );
+
+    versionDiffs = await detectVersionChanges(
+      config.branches.base,
+      headRef,
+      workspacePatterns.length > 0 ? workspacePatterns : ['packages/*'],
+      options.cwd,
+    );
+
     if (IS_WORKER) {
-      // Worker 环境使用 API
-      versionDiffs = await detectVersionChanges(
-        config.branches.base,
-        process.env.GITHUB_HEAD_REF_NAME || 'HEAD',
-        [config.releasePreview.workspaceFile],
-      );
       aggregatedLog = await aggregateReleaseLogsByAPI(config.branches.base);
     } else {
-      // 本地环境使用文件系统
-      const workspaceInfo = scanWorkspace(config.releasePreview.workspaceFile, options.cwd);
-      versionDiffs = await detectVersionChanges(
-        config.branches.base,
-        'HEAD',
-        Array.isArray(workspaceInfo.packages) ? workspaceInfo.packages : ([] as string[]),
-        options.cwd,
-      );
       aggregatedLog = aggregateReleaseLogs(options.cwd);
     }
 
@@ -136,6 +159,7 @@ export async function previewRelease(
       noChangeMessage,
       formatters,
       isMerged,
+      config.releasePreview.previewOutput,
     );
 
     await postOrUpdateComment(context, commentBody);

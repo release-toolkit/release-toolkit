@@ -1,9 +1,9 @@
-import { loadConfig } from '../../shared/config/index.js';
-import { scanWorkspace } from '../../shared/workspace.js';
+import { loadConfig, resolveGitTagName } from '../../shared/config/index.js';
+import { resolveWorkspacePackages } from '../../shared/workspace.js';
 import { detectVersionChanges } from '../../shared/version.js';
 import { createTagsForDiffs } from './tag-manager.js';
 import { createGithubRelease } from './github-release.js';
-import { runHooks } from './hook-runner.js';
+import { runPublisherHooks } from './hook-runner.js';
 import { loadPluginsAsIPlugin } from '../../shared/plugins/index.js';
 import { HookRunner } from '../../shared/hook-runner.js';
 import type { ReleasePublisherOptions, ReleasePublisherResult, ReleaseHookContext } from './types.js';
@@ -12,14 +12,21 @@ export async function publishRelease(
   options: ReleasePublisherOptions,
 ): Promise<ReleasePublisherResult> {
   const cwd = options.cwd || process.cwd();
-  const config = loadConfig(cwd);
+  const config = loadConfig({
+    cwd,
+    configPath: options.configPath,
+  });
+  const gitTags = config.releasePublisher?.gitTags;
   const errors: string[] = [];
   const releases: Array<{ packageName: string; tagName: string; releaseUrl?: string }> = [];
 
   const hookRunner = new HookRunner([]);
 
   try {
-    const { plugins: iPlugins } = await loadPluginsAsIPlugin(config.plugins);
+    const { plugins: iPlugins, errors: pluginErrors } = await loadPluginsAsIPlugin(config.plugins);
+    if (pluginErrors.length > 0) {
+      for (const e of pluginErrors) console.warn(`[publish] ${e}`);
+    }
     hookRunner.setPlugins(iPlugins);
 
     // 1. beforePublish 钩子
@@ -31,11 +38,14 @@ export async function publishRelease(
     });
 
     // 2. 检测版本变更
-    const workspaceInfo = scanWorkspace(config.releasePreview.workspaceFile, cwd);
+    const workspacePatterns = await resolveWorkspacePackages(
+      config.releasePreview.workspaceFile,
+      { cwd },
+    );
     const diffs = await detectVersionChanges(
       config.branches.base,
       'HEAD',
-      workspaceInfo.packages,
+      workspacePatterns.length > 0 ? workspacePatterns : ['packages/*'],
       cwd,
     );
 
@@ -50,16 +60,26 @@ export async function publishRelease(
           packageName: diff.package.packageName,
           oldVersion: diff.package.currentVersion,
           newVersion: diff.package.newVersion,
-          tagName: `${diff.package.packageName}@${diff.package.newVersion}`,
+          tagName: resolveGitTagName(
+            gitTags,
+            diff.package.packageName,
+            diff.package.newVersion,
+          ),
         };
 
         // beforeTag 钩子
         if (config.releasePublisher?.beforeTag?.length) {
-          await runHooks(config.releasePublisher.beforeTag, hookContext, cwd);
+          const { errors: hookErrors } = await runPublisherHooks(
+            'beforeTag',
+            config.releasePublisher.beforeTag,
+            hookContext,
+            cwd,
+          );
+          errors.push(...hookErrors);
         }
       }
 
-      const tagResults = await createTagsForDiffs(diffs, cwd);
+      const tagResults = await createTagsForDiffs(diffs, cwd, gitTags);
       for (const result of tagResults) {
         if (!result.success && result.error) {
           errors.push(`Tag ${result.tagName} 创建失败：${result.error}`);
@@ -70,7 +90,11 @@ export async function publishRelease(
     // 4. 创建 GitHub Releases
     if (config.releasePublisher?.createGithubRelease !== false && !options.dryRun) {
       for (const diff of diffs) {
-        const tagName = `${diff.package.packageName}@${diff.package.newVersion}`;
+        const tagName = resolveGitTagName(
+          gitTags,
+          diff.package.packageName,
+          diff.package.newVersion,
+        );
         const hookContext: ReleaseHookContext = {
           packageName: diff.package.packageName,
           oldVersion: diff.package.currentVersion,
@@ -104,9 +128,19 @@ export async function publishRelease(
           packageName: diff.package.packageName,
           oldVersion: diff.package.currentVersion,
           newVersion: diff.package.newVersion,
-          tagName: `${diff.package.packageName}@${diff.package.newVersion}`,
+          tagName: resolveGitTagName(
+            gitTags,
+            diff.package.packageName,
+            diff.package.newVersion,
+          ),
         };
-        await runHooks(config.releasePublisher.afterRelease, hookContext, cwd);
+        const { errors: hookErrors } = await runPublisherHooks(
+          'afterRelease',
+          config.releasePublisher.afterRelease,
+          hookContext,
+          cwd,
+        );
+        errors.push(...hookErrors);
       }
     }
 

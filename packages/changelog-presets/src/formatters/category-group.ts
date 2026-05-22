@@ -1,4 +1,4 @@
-import type { ChangelogFormatter } from '@release-toolkit/core';
+import type { ChangelogFormatter } from '@release-toolkit/types';
 import { COMMIT_TYPE_CATEGORY } from '../constants.js';
 
 /**

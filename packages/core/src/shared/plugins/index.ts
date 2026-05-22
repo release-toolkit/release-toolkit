@@ -6,10 +6,10 @@ export type {
   ILogFormatter,
   ChangelogFormatter,
   LoadedPlugins,
+  LoadPluginsResult,
   ReleaseHookContext,
   PRLogCollectorResult,
   ReleasePreviewResult,
   ReleasePublisherResult,
 } from './types.js';
-export type { LoadPluginsResult } from './loader.js';
 export { parseChangelog } from './utils.js';

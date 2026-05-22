@@ -27,7 +27,7 @@ packages/core/src/
 │   ├── pr-log-collector/              # PR 日志收集器
 │   │   ├── collector.ts               # 主入口 — collectPRLog()
 │   │   ├── release-log-extractor.ts   # 解析 RELEASE-LOG 标记区
-│   │   ├── package-log-format.ts      # 标题/列表项的统一渲染
+│   │   ├── package-log-format.ts      # 标题/列表项渲染（委托 @release-toolkit/markdown + 插件）
 │   │   ├── index.ts                   # barrel
 │   │   └── types.ts                   # PRLogCollectorOptions, PRMeta
 │   │

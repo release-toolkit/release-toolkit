@@ -4,17 +4,11 @@ import type {
   ChangelogFormatter,
   IPlugin,
   ILogParser,
+  LoadPluginsResult,
 } from './types.js';
 
-/** 加载插件结果（同时返回 IPlugin 和 ChangelogFormatter） */
-export interface LoadPluginsResult {
-  /** IPlugin 数组（支持生命周期钩子） */
-  plugins: IPlugin[];
-  /** 格式化器数组（兼容旧代码） */
-  formatters: ChangelogFormatter[];
-  /** 加载错误信息 */
-  errors: string[];
-}
+// 单一来源：复用 shared/types.ts 的 LoadPluginsResult
+export type { LoadPluginsResult };
 
 /**
  * 插件加载器

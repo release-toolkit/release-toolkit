@@ -1,20 +1,32 @@
 import type { IPlugin, ReleaseHookContext, PRLogCollectorResult, ReleasePreviewResult, ReleasePublisherResult } from './types.js';
 
 /**
- * 钩子执行结果
+ * 插件生命周期钩子执行结果
+ *
+ * > 与 `features/release-publisher/hook-runner.ts` 中的 `HookResult` 不同：
+ * > - 这里描述「插件」执行成功/失败；
+ * > - 那边描述「外部 command/script/package」执行成功/失败。
  */
-export interface HookResult {
+export interface PluginHookResult {
   plugin: string;
   hook: string;
   success: boolean;
   error?: string;
 }
 
+/** @deprecated 已重命名为 `PluginHookResult`，保留以保证向后兼容 */
+export type HookResult = PluginHookResult;
+
 /**
- * 钩子执行器
- * 在各 feature 执行前后调用插件的生命周期钩子
+ * 插件生命周期钩子调度器
+ *
+ * 在 `collectPRLog` / `previewRelease` / `publishRelease` 执行前后
+ * 调用每个 `IPlugin` 的 `beforeCollect`/`afterCollect` 等钩子。
+ *
+ * > `PluginHookRunner` 与 `features/release-publisher/hook-runner.ts` 中的 `runHooks` 同名易混淆：
+ * > 后者负责执行配置在 `releasePublisher.afterRelease` 等数组中的 shell/script/package 钩子。
  */
-export class HookRunner {
+export class PluginHookRunner {
   private plugins: IPlugin[];
 
   constructor(plugins: IPlugin[]) {
@@ -76,8 +88,8 @@ export class HookRunner {
   private async runHooks<T>(
     hookName: string,
     executor: (plugin: IPlugin) => Promise<T | void> | T | void,
-  ): Promise<HookResult[]> {
-    const results: HookResult[] = [];
+  ): Promise<PluginHookResult[]> {
+    const results: PluginHookResult[] = [];
 
     for (const plugin of this.plugins) {
       if (!(hookName in plugin)) {
@@ -105,3 +117,6 @@ export class HookRunner {
     return results;
   }
 }
+
+/** @deprecated 已重命名为 `PluginHookRunner`，保留以保证向后兼容 */
+export const HookRunner = PluginHookRunner;

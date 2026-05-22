@@ -23,9 +23,9 @@ App Server 是一个 **轻量的事件分发层**，运行在 Cloudflare Workers
 | `pull_request_review.submitted` (approved) | ✅ 已实现 | 写入 PR 描述体 `RELEASE-TOOLKIT-OUTPUT` 标记区 |
 | `pull_request.closed (merged)` | ✅ 已实现 | 触发 `release-publish.yml` workflow |
 | base 分支过滤 | ✅ 已实现 | 通过 `RELEASE_BASE_BRANCH` env |
-| 输出区块开关 | ✅ 已实现 | 通过 `OUTPUT_SECTIONS` env |
+| 输出区块开关 | ✅ 已实现 | 优先读仓库 `config.json` → `prLogCollector.outputSections`，回退 `OUTPUT_SECTIONS` env |
 | 通过 `installation.id` 获取 octokit | ✅ 已实现 | `App.getInstallationOctokit` |
-| 版本 diff 表 | ✅ 已实现 | `pulls.listFiles` + `repos.getContent` |
+| 版本 diff 表 | ✅ 已实现 | 复用 `@release-toolkit/core`：`fetchWorkspacePackagesWithOctokit` + `detectVersionChangesWithOctokit` |
 | Web UI 管理 | 🔲 规划中 | 提供可视化管理界面 |
 
 ---
@@ -35,13 +35,13 @@ App Server 是一个 **轻量的事件分发层**，运行在 Cloudflare Workers
 ```
 packages/app-server/
 ├── src/
-│   └── index.ts              # 单文件实现（Worker 入口）
+│   ├── index.ts              # Worker 入口（Webhook 路由）
+│   ├── format.ts             # 评论组装（复用 @release-toolkit/markdown）
+│   └── version-resolve.ts    # 版本检测（委托 core Compare + Contents API）
 ├── tsdown.config.ts
 ├── wrangler.toml             # Cloudflare Workers 配置
 └── package.json
 ```
-
-> 单文件实现以减小 bundle 体积、避免 Worker 启动开销。
 
 ---
 
@@ -93,9 +93,10 @@ flowchart TD
 | `verifySignature` | Web Crypto HMAC-SHA256，比较 `sha256=` 前缀 |
 | `parseReleaseLog` | 解析 `## pkg` + 列表，跳过 `### *` 子标题 |
 | `extractReleaseLog` | 从 PR body 中截取 `<!-- RELEASE-LOG-START/END -->` 区域 |
-| `formatTitleBullet` / `formatChangeLogBullets` | 与 core 输出一致的列表渲染（含 emoji 前缀） |
-| `listChangedPackages` | `octokit.paginate(pulls.listFiles)` 找出 `packages/*/package.json` |
-| `collectVersionDiffs` | 对每个变更包读取 base/head 的 `package.json` → 版本 diff |
+| `formatTitleBulletWithEmoji` / `formatChangeLogBulletsPlain` | 来自 `@release-toolkit/markdown` |
+| `resolvePRVersionState` | 读仓库 `config.json` 的 `workspaceFile`，调用 core 做 workspace + 版本 diff |
+| `fetchRepoToolkitConfig` | 从 PR head 读取 `.release-toolkit/config.json` |
+| `resolveOutputSectionsForPR` | 合并 config / env 的 `outputSections` |
 | `findToolComment` / `upsertPRComment` | 通过 `release-toolkit-comment-start` 锚点上 upsert 评论 |
 | `upsertOutputInBody` | 幂等替换 PR 描述体中的 `RELEASE-TOOLKIT-OUTPUT` 标记区 |
 | `dispatchWorkflow` | `actions.createWorkflowDispatch` 触发 CI |

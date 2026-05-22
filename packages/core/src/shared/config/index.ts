@@ -45,7 +45,15 @@ export interface LifecycleHook {
  */
 export interface AfterReleaseHook {
   /** 钩子类型（旧格式，推荐使用 run） */
-  type?: 'command' | 'npm-publish' | 'custom' | 'script' | 'package';
+  type?:
+    | 'command'
+    | 'npm-publish'
+    | 'custom'
+    | 'script'
+    | 'package'
+    | 'webhook'
+    | 'slack'
+    | 'discord';
   /** 新格式：钩子执行方式 */
   run?: HookCommand;
   /** 执行命令（npm-publish / custom / script 类型使用） */
@@ -72,6 +80,10 @@ export interface AfterReleaseHook {
   webhookUrl?: string;
   /** Discord 消息内容 */
   discordMessage?: string;
+  /** 与 LifecycleHook 对齐：主 run 执行后的附加 webhook */
+  webhook?: LifecycleHook['webhook'];
+  /** 与 LifecycleHook 对齐：主 run 执行后的附加通知 */
+  notify?: LifecycleHook['notify'];
 }
 
 /**
@@ -138,11 +150,14 @@ export interface ReleasePublisherConfig {
   createGithubRelease: boolean;
   /** Git Tag 格式配置 */
   gitTags?: GitTagsConfig;
-  /** 创建 Tag 前钩子 */
-  beforeTag?: AfterReleaseHook[];
-  /** 发布后钩子 */
-  afterRelease?: AfterReleaseHook[];
+  /** 创建 Tag 前钩子（支持 LifecycleHook 格式） */
+  beforeTag?: PublisherHookConfig[];
+  /** 发布后钩子（支持 LifecycleHook 格式） */
+  afterRelease?: PublisherHookConfig[];
 }
+
+/** 配置文件中 beforeTag / afterRelease 数组项类型 */
+export type PublisherHookConfig = AfterReleaseHook | LifecycleHook;
 
 /**
  * Release Toolkit 完整配置类型
@@ -203,9 +218,26 @@ const DEFAULT_CONFIG: ReleaseToolkitConfig = {
   plugins: ['emoji-prefix', 'category-group', 'markdown-bold'],
 };
 
-export function loadConfig(cwd?: string): ReleaseToolkitConfig {
-  const basePath = cwd || process.cwd();
-  const configPath = resolve(basePath, CONFIG_DIR, CONFIG_FILE);
+export interface LoadConfigOptions {
+  /** 工作目录，用于解析相对 configPath */
+  cwd?: string;
+  /** 配置文件绝对或相对路径，默认 `<cwd>/.release-toolkit/config.json` */
+  configPath?: string;
+}
+
+export function loadConfig(cwd?: string): ReleaseToolkitConfig;
+export function loadConfig(options: LoadConfigOptions): ReleaseToolkitConfig;
+export function loadConfig(
+  cwdOrOptions?: string | LoadConfigOptions,
+): ReleaseToolkitConfig {
+  const basePath =
+    typeof cwdOrOptions === 'string'
+      ? cwdOrOptions
+      : cwdOrOptions?.cwd || process.cwd();
+  const configPath =
+    typeof cwdOrOptions === 'object' && cwdOrOptions?.configPath
+      ? resolve(basePath, cwdOrOptions.configPath)
+      : resolve(basePath, CONFIG_DIR, CONFIG_FILE);
 
   if (!existsSync(configPath)) {
     return { ...DEFAULT_CONFIG };
@@ -216,7 +248,11 @@ export function loadConfig(cwd?: string): ReleaseToolkitConfig {
     const userConfig = JSON.parse(raw) as unknown as Record<string, unknown>;
     const merged = deepMerge(DEFAULT_CONFIG, userConfig);
     return merged as unknown as ReleaseToolkitConfig;
-  } catch {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(
+      `[release-toolkit] 配置文件 ${configPath} 解析失败，已回退到默认配置：${msg}`,
+    );
     return JSON.parse(JSON.stringify(DEFAULT_CONFIG)) as ReleaseToolkitConfig;
   }
 }
@@ -253,4 +289,9 @@ function deepMerge(
   return result;
 }
 
+export {
+  applyGitTagTemplate,
+  resolveGitTagName,
+  resolveGitTagMessage,
+} from './git-tag-format.js';
 export { CONFIG_DIR, CONFIG_FILE, DEFAULT_CONFIG };

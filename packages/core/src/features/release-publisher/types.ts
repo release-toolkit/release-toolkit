@@ -1,22 +1,15 @@
-import type { ReleaseHookContext } from '../../shared/types.js';
+import type { ReleaseHookContext, ReleasePublisherResult } from '../../shared/types.js';
 import type { AfterReleaseHook, HookCommand } from '../../shared/config/index.js';
 
-export type { ReleaseHookContext, AfterReleaseHook, HookCommand };
+// 复用 shared/types.ts 中的统一定义
+export type { ReleaseHookContext, ReleasePublisherResult, AfterReleaseHook, HookCommand };
 
 export interface ReleasePublisherOptions {
   cwd?: string;
+  /** 配置文件路径，相对 cwd 或绝对路径 */
+  configPath?: string;
   dryRun?: boolean;
   owner?: string;
   repo?: string;
   token?: string;
-}
-
-export interface ReleasePublisherResult {
-  success: boolean;
-  releases: Array<{
-    packageName: string;
-    tagName: string;
-    releaseUrl?: string;
-  }>;
-  errors: string[];
 }

@@ -25,15 +25,16 @@
     "js-yaml": "^4.1.0",
     "semver": "^7.6.0",
     "simple-git": "^3.25.0",
-    "@release-toolkit/changelog-presets": "workspace:*"
+    "@release-toolkit/changelog-presets": "workspace:*",
+    "@release-toolkit/markdown": "workspace:*",
+    "@release-toolkit/types": "workspace:*"
   },
   "optionalDependencies": {
-    "octokit": "^4.0.0"
+    "octokit": "^5.0.4"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.0",
     "@types/node": "^25.6.0",
-    "@types/semver": "^7.7.1",
-    "vite-tsconfig-paths": "^6.1.1"
+    "@types/semver": "^7.7.1"
   }
 }

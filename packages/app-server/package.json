@@ -8,10 +8,12 @@
     "dev": "pnpm build && wrangler dev",
     "build": "tsdown",
     "deploy": "tsdown && wrangler deploy",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@release-toolkit/core": "workspace:*",
+    "@release-toolkit/markdown": "workspace:*",
     "octokit": "^5.0.4"
   },
   "devDependencies": {

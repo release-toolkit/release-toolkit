@@ -9,6 +9,8 @@ export interface ReleasePreviewOptions {
   repo: string;
   token?: string;
   cwd?: string;
+  /** 配置文件路径，相对 cwd 或绝对路径 */
+  configPath?: string;
 }
 
 export interface ReleasePreviewResult {

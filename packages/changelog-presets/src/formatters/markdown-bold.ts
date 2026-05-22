@@ -1,4 +1,4 @@
-import type { ILineFormatter } from '@release-toolkit/core';
+import type { ILineFormatter } from '@release-toolkit/types';
 
 /**
  * Markdown bold formatter

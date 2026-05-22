@@ -11,7 +11,7 @@ flowchart TD
         B --> B1[提取 PR 标题 + 评论日志(特定格式截取)]
         B1 --> B1a[PR 被 Approve]
         B1a --> B2[更新 PR 描述体]
-        B2 --> B3[保存快照到 .release-toolkit/logs/]
+        B2 --> B3[保存快照到 .release-toolkit/releases/]
     end
 
     subgraph 预览阶段
@@ -105,6 +105,8 @@ flowchart TD
 
 ```
 packages/
+├── types/             # 共享类型定义（打破 core ↔ presets 循环依赖）
+├── markdown/          # 共享 Markdown 工具（列表、RELEASE-LOG 解析、emoji）
 ├── core/              # 核心引擎（功能模块 + 共享工具）
 ├── cli/               # CLI 入口（release 命令）
 ├── changelog-presets/ # Changelog 格式化预设
@@ -116,9 +118,15 @@ packages/
 ```mermaid
 graph LR
     CLI["@release-toolkit/cli"] --> Core["@release-toolkit/core"]
-    Presets["@release-toolkit/changelog-presets"] --> Core
+    Core --> Types["@release-toolkit/types"]
+    Core --> Markdown["@release-toolkit/markdown"]
+    AppServer --> Markdown
+    Presets --> Types
+    Presets --> Markdown
     AppServer["@release-toolkit/app-server"] -.->|独立| Env[Cloudflare Workers]
 ```
+
+CLI 支持 `--config-path` 指定配置文件（默认 `.release-toolkit/config.json`）。
 
 ## 配置
 
@@ -140,10 +148,15 @@ graph LR
   },
   "releasePublisher": {
     "createGithubRelease": true,
+    "gitTags": {
+      "format": "{packageName}@{version}",
+      "message": "Release {packageName}@{version}"
+    },
     "beforeTag": [],
     "afterRelease": [{ "type": "command", "command": "pnpm -r publish" }],
     "afterPublish": []
-  }
+  },
+  "plugins": ["emoji-prefix", "category-group", "markdown-bold"]
 }
 ```
 

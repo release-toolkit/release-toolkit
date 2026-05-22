@@ -61,6 +61,29 @@ export {
   parseChangelog,
 } from './shared/plugins/index.js';
 
+// Shared: version & workspace (API / Worker)
+export {
+  detectVersionChanges,
+  detectVersionChangesByAPI,
+  detectVersionChangesWithOctokit,
+  listChangedPackagePathsWithOctokit,
+  matchesWorkspaceFilePath,
+  resolveWorkspacePackages,
+  parseWorkspacePackages,
+  fetchWorkspacePackagesByAPI,
+  fetchWorkspacePackagesWithOctokit,
+} from './shared/index.js';
+export type { WorkspaceApiContext, RepoVersionContext } from './shared/index.js';
+
+// Shared: publisher hooks
+export {
+  runPublisherHooks,
+  runHooks,
+  runHooksAndCheck,
+  formatHookFailureMessages,
+} from './features/release-publisher/hook-runner.js';
+export type { PublisherHook, HookResult } from './features/release-publisher/hook-runner.js';
+
 // Shared: utils
 export { IS_WORKER, escapeRegex, parseGithubRepository, OUTPUT_MARKERS } from './shared/utils.js';
 

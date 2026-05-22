@@ -43,15 +43,18 @@ program.parse();
 ## 使用示例
 
 ```bash
-# PR 日志收集
-npx release collect --pr=123 --branch=dev
+# PR 日志收集（写入 PR 描述体）
+npx release collect --pr-number 123 --owner my-org --repo my-repo
 
-# 版本发布预览
-npx release preview --branch=main
+# 版本发布预览（评论到 PR）
+npx release preview --pr-number 123 --owner my-org --repo my-repo
 
-# 发布版本
-npx release publish --branch=main
+# 发布版本（一般由 release-publish.yml 在合并后触发）
+npx release publish
 ```
+
+> 目标分支由 `.release-toolkit/config.json` 的 `branches.base` 控制，
+> 目前 CLI 暂未提供 `--branch` 覆盖 flag。
 
 ## 依赖
 

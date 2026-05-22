@@ -1,4 +1,4 @@
-import type { ILineFormatter } from '@release-toolkit/core';
+import type { ILineFormatter } from '@release-toolkit/types';
 import { COMMIT_TYPE_EMOJI } from '../constants.js';
 
 /**

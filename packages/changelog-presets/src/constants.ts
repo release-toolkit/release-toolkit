@@ -1,17 +1,5 @@
-/** Emoji mapping for commit types */
-export const COMMIT_TYPE_EMOJI: Record<string, string> = {
-  feat: '✨',
-  fix: '🐛',
-  docs: '📝',
-  style: '💄',
-  refactor: '♻️',
-  perf: '⚡️',
-  test: '✅',
-  build: '📦️',
-  ci: '👷',
-  chore: '🔧',
-  revert: '⏪️',
-};
+/** Emoji mapping for commit types（与 @release-toolkit/markdown 同源） */
+export { COMMIT_TYPE_EMOJI } from '@release-toolkit/markdown';
 
 /** Commit type to category mapping (for grouping in changelog) */
 export const COMMIT_TYPE_CATEGORY: Record<string, { name: string; emoji: string }> = {

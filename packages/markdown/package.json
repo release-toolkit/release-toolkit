@@ -1,0 +1,24 @@
+{
+  "name": "@release-toolkit/markdown",
+  "version": "0.0.0",
+  "description": "Shared markdown utilities for release-toolkit (bullets, RELEASE-LOG parsing, emoji prefixes)",
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "scripts": {
+    "build": "tsdown --config tsdown.config.ts",
+    "dev": "tsdown --config tsdown.config.ts --watch",
+    "test": "vitest run",
+    "type-check": "tsc --noEmit"
+  },
+  "files": ["dist", "README.md"],
+  "devDependencies": {
+    "@types/node": "^25.6.0"
+  }
+}
