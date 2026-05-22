@@ -12,10 +12,10 @@ import {
   OUTPUT_START,
   RELEASE_LOG_END,
   RELEASE_LOG_START,
-  escapeRegex,
   extractReleaseLogFromBody,
   formatChangeLogBulletsPlain,
   formatTitleBulletWithEmoji,
+  upsertOutputInBody,
   type PackageChangeLog,
 } from '@release-toolkit/markdown';
 
@@ -271,22 +271,6 @@ export function buildConfirmedReleaseLog(
   ].join('\n');
 }
 
-export function wrapOutputMarkers(content: string): string {
-  return `${OUTPUT_START}\n${content}\n${OUTPUT_END}`;
-}
-
-export function upsertOutputInBody(currentBody: string | null, content: string): string {
-  const body = currentBody ?? '';
-  const wrapped = wrapOutputMarkers(content);
-  if (body.includes(OUTPUT_START) && body.includes(OUTPUT_END)) {
-    return body.replace(
-      new RegExp(`${escapeRegex(OUTPUT_START)}[\\s\\S]*?${escapeRegex(OUTPUT_END)}`),
-      wrapped,
-    );
-  }
-  return body.trim() ? `${body}\n\n${wrapped}` : wrapped;
-}
-
 /** @deprecated 使用 formatTitleBulletWithEmoji */
 export const formatTitleBullet = formatTitleBulletWithEmoji;
 
@@ -299,4 +283,6 @@ export {
   applyEmojiPrefixToLine as applyEmojiPrefix,
   parseReleaseLog,
   EMPTY_CHANGELOG_BULLET,
+  wrapOutputMarkers,
+  upsertOutputInBody,
 } from '@release-toolkit/markdown';

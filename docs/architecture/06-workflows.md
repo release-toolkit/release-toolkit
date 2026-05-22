@@ -43,6 +43,45 @@
 
 ---
 
+## 共享层：谁负责哪段 Markdown
+
+端到端流程中，**同一份视觉规范**由 `@release-toolkit/markdown` 保证，不同运行时再叠加各自能力：
+
+```mermaid
+sequenceDiagram
+  participant User as 用户 / PR body
+  participant App as app-server
+  participant MD as markdown
+  participant CI as core + CLI
+  participant GH as GitHub
+
+  User->>App: PR 事件 Webhook
+  App->>MD: parseReleaseLog / formatTitleBulletWithEmoji
+  App->>GH: upsert 评论（待审批 + 预览）
+
+  User->>User: Approve
+  App->>MD: upsertOutputInBody
+  App->>GH: 写入 PR 描述体 OUTPUT 区
+
+  User->>CI: workflow collect / preview / publish
+  CI->>MD: extractReleaseLog + 插件 formatters
+  CI->>MD: upsertOutputInBody（含说明块）
+  CI->>GH: Tag / Release
+```
+
+| 阶段 | 运行时 | markdown 入口 | 额外能力 |
+|------|--------|---------------|----------|
+| 待审批评论 | App Server | `buildPRComment` → `formatTitleBulletWithEmoji` | 读仓库 `config.json` 的 `outputSections` |
+| 用户编辑区 | 用户 | `RELEASE_LOG_*` 标记 | — |
+| Approve 写入 | App Server | `upsertOutputInBody` | 从评论生成确认日志 |
+| CI collect | core | `formatTitleBulletLine` + 插件 | `git diff` 变更包列表 |
+| CI preview | core | `OUTPUT_MARKERS` 聚合 | workspace API 版本检测 |
+| CI publish | core | — | Tag / Release / 钩子 |
+
+详见 [08-markdown-package.md](./08-markdown-package.md)。
+
+---
+
 ## 阶段一：PR 提交（首次）— prLogCollector
 
 **触发时机**：PR 首次提交到目标分支（如 `dev`）
@@ -369,19 +408,17 @@ App Server: workflow_dispatch(release-publish.yml)
 │                              数据流                                          │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  PR 描述体/评论                                                              │
+│  PR 评论（App Server）                                                       │
+│       ↓  @release-toolkit/markdown：列表 / emoji / ## 包名                   │
+│  PR 描述体                                                                   │
+│       ├─ <!-- RELEASE-LOG-START -->  （用户编辑，markdown 解析）              │
+│       └─ <!-- RELEASE-TOOLKIT-OUTPUT-* --> （工具写入，upsertOutputInBody）   │
 │       ↓                                                                     │
-│  <!-- RELEASE-LOG-START -->                                                 │
-│  ... 变更日志 ...                                                           │
-│  <!-- RELEASE-LOG-END -->                                                   │
+│  .release-toolkit/releases/pr{N}-{timestamp}.md（CI collect 快照，可选）      │
 │       ↓                                                                     │
-│  .release-toolkit/releases/pr{prNumber}-{timestamp}.md (快照)               │
-│       ↓                                                                     │
-│  releasePublisher 聚合所有 PR 日志                                           │
-│       ↓                                                                     │
-│  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │  Git Tags + GitHub Release + afterRelease 钩子                       │    │
-│  └─────────────────────────────────────────────────────────────────────┘    │
+│  releasePublisher：版本检测 → Tag → GitHub Release → 钩子                    │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+包依赖与 markdown 职责见 [01-overview.md](./01-overview.md)、[08-markdown-package.md](./08-markdown-package.md)。

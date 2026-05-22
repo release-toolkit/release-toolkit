@@ -6,6 +6,12 @@ import {
   formatChangeLogBulletsPlain,
   parseReleaseLog,
   extractReleaseLogFromBody,
+  escapeRegex,
+  OUTPUT_MARKERS,
+  OUTPUT_START,
+  OUTPUT_END,
+  wrapOutputMarkers,
+  upsertOutputInBody,
   RELEASE_LOG_START,
   RELEASE_LOG_END,
 } from '../index.js';
@@ -58,6 +64,32 @@ describe('parseReleaseLog', () => {
   it('无 ## 时为通用日志', () => {
     const result = parseReleaseLog('- 通用 1\n- 通用 2');
     expect(result[0].packages).toEqual([]);
+  });
+});
+
+describe('OUTPUT_MARKERS / escapeRegex', () => {
+  it('OUTPUT_MARKERS 与独立常量一致', () => {
+    expect(OUTPUT_MARKERS.START).toBe(OUTPUT_START);
+    expect(OUTPUT_MARKERS.END).toBe(OUTPUT_END);
+  });
+
+  it('escapeRegex 应转义元字符', () => {
+    expect(escapeRegex('a.b*c')).toBe('a\\.b\\*c');
+  });
+});
+
+describe('upsertOutputInBody', () => {
+  it('首次写入追加标记区', () => {
+    const result = upsertOutputInBody('原描述', 'CONTENT');
+    expect(result).toContain('原描述');
+    expect(result).toContain(wrapOutputMarkers('CONTENT'));
+  });
+
+  it('已有标记区时幂等替换', () => {
+    const body = `前\n${OUTPUT_START}\nOLD\n${OUTPUT_END}\n后`;
+    const result = upsertOutputInBody(body, 'NEW');
+    expect(result).toContain('NEW');
+    expect(result).not.toContain('OLD');
   });
 });
 

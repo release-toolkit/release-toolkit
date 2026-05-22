@@ -9,7 +9,8 @@ import { HookRunner } from '../../shared/hook-runner.js';
 import { formatReleasePreviewComment } from './formatter.js';
 import type { ReleasePreviewOptions, ReleasePreviewResult } from './types.js';
 import type { VersionDiffResult } from '../../shared/types.js';
-import { IS_WORKER, OUTPUT_MARKERS, escapeRegex } from '../../shared/utils.js';
+import { escapeRegex, OUTPUT_MARKERS } from '@release-toolkit/markdown';
+import { IS_WORKER } from '../../shared/utils.js';
 
 /**
  * 通过 API 获取聚合的 Release Logs

@@ -19,3 +19,9 @@ export const DEFAULT_RELEASE_LOG_MARKERS: ReleaseLogMarkers = {
   start: RELEASE_LOG_START,
   end: RELEASE_LOG_END,
 };
+
+/** 与 core 历史 API 兼容的对象形式 */
+export const OUTPUT_MARKERS = {
+  START: OUTPUT_START,
+  END: OUTPUT_END,
+} as const;

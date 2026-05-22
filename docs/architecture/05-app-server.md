@@ -91,7 +91,7 @@ flowchart TD
 | 函数 | 说明 |
 |------|------|
 | `verifySignature` | Web Crypto HMAC-SHA256，比较 `sha256=` 前缀 |
-| `parseReleaseLog` | 解析 `## pkg` + 列表，跳过 `### *` 子标题 |
+| `parseReleaseLog` | 见 `@release-toolkit/markdown`（本包 re-export） |
 | `extractReleaseLog` | 从 PR body 中截取 `<!-- RELEASE-LOG-START/END -->` 区域 |
 | `formatTitleBulletWithEmoji` / `formatChangeLogBulletsPlain` | 来自 `@release-toolkit/markdown` |
 | `resolvePRVersionState` | 读仓库 `config.json` 的 `workspaceFile`，调用 core 做 workspace + 版本 diff |

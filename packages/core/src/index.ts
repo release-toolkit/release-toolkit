@@ -85,7 +85,16 @@ export {
 export type { PublisherHook, HookResult } from './features/release-publisher/hook-runner.js';
 
 // Shared: utils
-export { IS_WORKER, escapeRegex, parseGithubRepository, OUTPUT_MARKERS } from './shared/utils.js';
+export {
+  IS_WORKER,
+  parseGithubRepository,
+  OUTPUT_MARKERS,
+  OUTPUT_START,
+  OUTPUT_END,
+  escapeRegex,
+  wrapOutputMarkers,
+  upsertOutputInBody,
+} from './shared/utils.js';
 
 // Features: prLogCollector
 export { collectPRLog } from './features/pr-log-collector/index.js';

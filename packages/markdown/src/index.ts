@@ -3,11 +3,18 @@ export {
   RELEASE_LOG_END,
   OUTPUT_START,
   OUTPUT_END,
+  OUTPUT_MARKERS,
   COMMENT_ANCHOR_START,
   COMMENT_ANCHOR_END,
   DEFAULT_RELEASE_LOG_MARKERS,
   type ReleaseLogMarkers,
 } from './markers.js';
+
+export {
+  wrapOutputMarkers,
+  upsertOutputInBody,
+  type UpsertOutputOptions,
+} from './output-body.js';
 
 export { COMMIT_TYPE_EMOJI, applyEmojiPrefixToLine } from './emoji.js';
 

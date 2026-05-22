@@ -77,4 +77,13 @@ export type { RepoVersionContext } from './version-api.js';
 export { aggregateReleaseLogs } from './changelog-aggregator.js';
 
 // Utils
-export { IS_WORKER, OUTPUT_MARKERS, escapeRegex, parseGithubRepository } from './utils.js';
+export {
+  IS_WORKER,
+  parseGithubRepository,
+  OUTPUT_MARKERS,
+  OUTPUT_START,
+  OUTPUT_END,
+  escapeRegex,
+  wrapOutputMarkers,
+  upsertOutputInBody,
+} from './utils.js';

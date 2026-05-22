@@ -18,18 +18,14 @@ export const IS_WORKER = (() => {
   return typeof (globalThis as unknown as { process?: { versions?: { node?: string } } }).process?.versions?.node !== 'string';
 })();
 
-/** 输出标记常量 */
-export const OUTPUT_MARKERS = {
-  START: '<!-- RELEASE-TOOLKIT-OUTPUT-START -->',
-  END: '<!-- RELEASE-TOOLKIT-OUTPUT-END -->',
-} as const;
-
-/**
- * 转义正则表达式特殊字符
- */
-export function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+export {
+  OUTPUT_MARKERS,
+  OUTPUT_START,
+  OUTPUT_END,
+  escapeRegex,
+  wrapOutputMarkers,
+  upsertOutputInBody,
+} from '@release-toolkit/markdown';
 
 /**
  * 解析 GitHub 仓库路径

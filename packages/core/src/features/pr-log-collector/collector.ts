@@ -9,10 +9,9 @@ import type { PackageChangeLog } from './release-log-extractor.js';
 import type { PRLogCollectorOptions, PRMeta } from './types.js';
 import { loadPlugins, loadPluginsAsIPlugin } from '../../shared/plugins/index.js';
 import { HookRunner } from '../../shared/hook-runner.js';
-import { IS_WORKER, OUTPUT_MARKERS, escapeRegex } from '../../shared/utils.js';
+import { upsertOutputInBody } from '@release-toolkit/markdown';
+import { IS_WORKER } from '../../shared/utils.js';
 import { formatTitleBullet, formatChangeLogBullets } from './package-log-format.js';
-
-const { START: OUTPUT_START, END: OUTPUT_END } = OUTPUT_MARKERS;
 
 /** 生成标记区的用户指南（使用引用格式，用户可见） */
 function generateSpecExplanation(): string {
@@ -286,18 +285,7 @@ async function saveSnapshot(
 }
 
 function updatePRBody(currentBody: string | null, newContent: string): string {
-  const body = currentBody ?? '';
   const explanation = generateSpecExplanation();
-  const wrappedContent = `${OUTPUT_START}\n${explanation}\n${newContent}\n${OUTPUT_END}`;
-
-  if (body.includes(OUTPUT_START) && body.includes(OUTPUT_END)) {
-    // 幂等更新：替换现有标记区内容
-    return body.replace(
-      new RegExp(`${escapeRegex(OUTPUT_START)}[\\s\\S]*?${escapeRegex(OUTPUT_END)}`, 'g'),
-      wrappedContent,
-    );
-  }
-
-  // 首次运行：追加到描述体末尾
-  return `${body}\n\n${wrappedContent}`;
+  const inner = `${explanation}\n${newContent}`;
+  return upsertOutputInBody(currentBody, inner, { replaceAll: true });
 }

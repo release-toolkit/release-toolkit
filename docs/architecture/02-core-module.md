@@ -159,7 +159,7 @@ function parseChangelog(text: string): Array<{ type: string; scope?: string; sub
 | 来源 | 导出名 |
 |------|--------|
 | `shared/config` | `loadConfig`, `CONFIG_DIR`, `CONFIG_FILE`, `DEFAULT_CONFIG` |
-| `shared/utils` | `IS_WORKER`, `escapeRegex`, `parseGithubRepository`, `OUTPUT_MARKERS` |
+| `shared/utils` | `IS_WORKER`, `parseGithubRepository`；`OUTPUT_MARKERS` / `escapeRegex` / `upsertOutputInBody` 再导出自 `@release-toolkit/markdown` |
 | `shared/github/api-client` | `createOctokit`, `getPR`, `getPRComments`, `createPRComment`, `updatePRComment`, `updatePR` |
 | `shared/github/pr-commenter` | `postOrUpdateComment` |
 | `shared/github/context-detector` | `detectGithubContext` |

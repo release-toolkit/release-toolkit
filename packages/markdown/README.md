@@ -18,3 +18,5 @@ release-toolkit 各包共用的 **纯字符串** Markdown 工具（无 Node fs�
 | `formatChangeLogBulletsFromBody` | 可注入 body 转换（core 接插件） |
 | `parseReleaseLog` | 解析 `## pkg` 分组 RELEASE-LOG |
 | `extractReleaseLogFromBody` | 从 PR body 截取标记区 |
+| `OUTPUT_MARKERS` | `{ START, END }` 与 `OUTPUT_*` 常量 |
+| `wrapOutputMarkers` / `upsertOutputInBody` | PR 描述体输出区幂等更新 |

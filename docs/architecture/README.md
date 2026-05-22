@@ -22,6 +22,7 @@
 - [05-app-server.md](./05-app-server.md) - GitHub App 服务端详解
 - [06-workflows.md](./06-workflows.md) - 工作流程详解
 - [07-config-and-plugin.md](./07-config-and-plugin.md) - 配置系统与插件系统详解
+- [08-markdown-package.md](./08-markdown-package.md) - 共享 Markdown 模块（`@release-toolkit/markdown`）
 
 ## 快速开始
 
