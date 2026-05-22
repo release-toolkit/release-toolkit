@@ -52,9 +52,9 @@ release-toolkit/
 
 | 功能 | 触发时机 | 说明 |
 |------|----------|------|
-| `prLogCollector` | PR → dev | 收集 PR 变更日志 |
-| `releasePreview` | PR → main | 版本发布预览 |
-| `releasePublisher` | PR 合并到 main | 执行版本发布 |
+| `prLogCollector` | PR → `branches.base`（默认 dev） | 收集 PR 变更日志 |
+| `releasePreview` | PR → `branches.base` | 版本发布预览 |
+| `releasePublisher` | PR 合并到 `branches.base` | 执行版本发布 |
 
 ## 技术栈
 

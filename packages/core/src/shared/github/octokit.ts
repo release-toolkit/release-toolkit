@@ -172,39 +172,6 @@ export async function createRelease(
 }
 
 /**
- * 获取 PR 列表
- */
-export async function getPullRequests(
-  options: OctokitOptions,
-  state: 'open' | 'closed' = 'open',
-  baseRef?: string,
-): Promise<Array<{
-  number: number;
-  title: string;
-  head: { ref: string; sha: string };
-  body?: string;
-  merged?: boolean;
-  merged_at?: string;
-}>> {
-  const params = new URLSearchParams({ state, sort: 'created', direction: 'desc' });
-  if (baseRef) params.set('base', baseRef);
-
-  const data = await request<{ data: unknown[] }>(
-    `pulls?${params}`,
-    options,
-  );
-
-  return data.data as Array<{
-    number: number;
-    title: string;
-    head: { ref: string; sha: string };
-    body?: string;
-    merged?: boolean;
-    merged_at?: string;
-  }>;
-}
-
-/**
  * 获取 PR 的变更文件列表
  */
 export async function getPRFiles(

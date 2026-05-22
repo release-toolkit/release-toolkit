@@ -51,68 +51,68 @@ export function extractReleaseLog(
   };
 }
 
-/** 解析 RELEASE-LOG 标记区内容，支持格式 A/B/C */
+/**
+ * 解析 RELEASE-LOG 标记区内容
+ *
+ * 支持的写法：
+ * 1. `## pkg-a, pkg-b` 后紧跟列表项 / 文本（推荐）
+ * 2. 兼容旧格式：`## pkg` → `### 标题` / `### 变更日志` 的所有 `### *` 子标题会被跳过，
+ *    后续的列表项 / 文本会作为该包的 changeLog 收集
+ * 3. 无 `## 包名` 时，整个内容作为「通用变更日志」，应用到所有变更包
+ */
 function parseReleaseLog(content: string): PackageChangeLog[] {
-  const lines = content.split('\n');
+  const trimmedContent = content.trim();
+  if (!trimmedContent) return [];
+
+  const lines = trimmedContent.split('\n');
   const result: PackageChangeLog[] = [];
 
   let currentPackages: string[] = [];
-  let currentChangeLogLines: string[] = [];
-  let inChangeLog = false;
+  let currentLines: string[] = [];
+  let started = false;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+  const flush = () => {
+    const log = currentLines.join('\n').trim();
+    if (!log) return;
+    result.push({ packages: [...currentPackages], changeLog: log });
+  };
+
+  for (const line of lines) {
     const trimmedLine = line.trim();
 
-    // 检测包名行：## package-a, package-b 或 ## package-a
+    // 包名分组：## package-a, package-b
     if (trimmedLine.startsWith('## ') && !trimmedLine.startsWith('### ')) {
-      // 保存前一段
-      if (inChangeLog && currentChangeLogLines.length > 0) {
-        result.push({
-          packages: currentPackages,
-          changeLog: currentChangeLogLines.join('\n').trim(),
-        });
-      }
-
-      // 解析包名
-      const packageNames = trimmedLine
+      if (started) flush();
+      currentPackages = trimmedLine
         .replace(/^## /, '')
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean);
-
-      currentPackages = packageNames;
-      currentChangeLogLines = [];
-      inChangeLog = false;
+      currentLines = [];
+      started = true;
       continue;
     }
 
-    // 检测变更日志开始：### 变更日志
+    // 跳过任意 `### *` 子标题（兼容旧 `### 标题` / `### 变更日志`）
     if (trimmedLine.startsWith('### ')) {
-      inChangeLog = true;
-      continue; // 跳过标题行，只保留内容
+      continue;
     }
 
-    // 收集变更日志内容
-    if (inChangeLog) {
-      currentChangeLogLines.push(line);
+    if (started) {
+      currentLines.push(line);
+    } else {
+      // 第一个 `##` 之前的内容，作为通用变更日志
+      currentLines.push(line);
     }
   }
 
-  // 保存最后一段
-  if (inChangeLog && currentChangeLogLines.length > 0) {
-    result.push({
-      packages: currentPackages,
-      changeLog: currentChangeLogLines.join('\n').trim(),
-    });
-  }
-
-  // 如果没有解析到任何结构（格式 C：无包名声明），将整个内容作为通用变更日志
-  if (result.length === 0 && content.trim()) {
-    result.push({
-      packages: [], // 空数组表示应用到所有变更包
-      changeLog: content.trim(),
-    });
+  if (started) {
+    flush();
+  } else {
+    const log = currentLines.join('\n').trim();
+    if (log) {
+      result.push({ packages: [], changeLog: log });
+    }
   }
 
   return result;

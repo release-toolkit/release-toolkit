@@ -2,8 +2,21 @@
  * 公共工具函数
  */
 
-/** 检测是否在 Cloudflare Worker 环境 */
-export const IS_WORKER = typeof globalThis !== 'undefined' && 'env' in globalThis as unknown as Record<string, unknown>;
+/**
+ * 检测是否在 Cloudflare Worker 环境
+ *
+ * 优先依据 Cloudflare 官方设定的 `navigator.userAgent === 'Cloudflare-Workers'`，
+ * 其次回退到 `process` 缺失的判断，避免误把 Node 当成 Worker。
+ */
+export const IS_WORKER = (() => {
+  try {
+    const nav = (globalThis as unknown as { navigator?: { userAgent?: string } }).navigator;
+    if (nav?.userAgent === 'Cloudflare-Workers') return true;
+  } catch {
+    // ignore
+  }
+  return typeof (globalThis as unknown as { process?: { versions?: { node?: string } } }).process?.versions?.node !== 'string';
+})();
 
 /** 输出标记常量 */
 export const OUTPUT_MARKERS = {

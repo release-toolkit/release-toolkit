@@ -115,6 +115,63 @@ More content`;
     });
   });
 
+  describe('Format D: New bullet style without ### subheadings', () => {
+    it('should parse `## pkg` followed by direct bullet list', () => {
+      const body = `<!-- RELEASE-LOG-START -->
+## package-a
+- feat: 新增登录功能（标题）
+- 新增微信登录
+- 修复定时器问题
+<!-- RELEASE-LOG-END -->`;
+
+      const result = extractReleaseLog(body, defaultConfig);
+
+      expect(result.packageChangeLogs).toHaveLength(1);
+      expect(result.packageChangeLogs[0].packages).toEqual(['package-a']);
+      expect(result.packageChangeLogs[0].changeLog).toContain('新增登录');
+      expect(result.packageChangeLogs[0].changeLog).toContain('修复定时器');
+    });
+
+    it('should parse multiple `## pkg` sections with direct bullets', () => {
+      const body = `<!-- RELEASE-LOG-START -->
+## package-a
+- feat: A 功能（标题）
+- A 的细节
+
+## package-b
+- fix: B 修复（标题）
+- B 的细节
+<!-- RELEASE-LOG-END -->`;
+
+      const result = extractReleaseLog(body, defaultConfig);
+
+      expect(result.packageChangeLogs).toHaveLength(2);
+      expect(result.packageChangeLogs[0].packages).toEqual(['package-a']);
+      expect(result.packageChangeLogs[0].changeLog).toContain('A 功能');
+      expect(result.packageChangeLogs[1].packages).toEqual(['package-b']);
+      expect(result.packageChangeLogs[1].changeLog).toContain('B 修复');
+    });
+
+    it('should skip `### *` subheadings while keeping bullets', () => {
+      const body = `<!-- RELEASE-LOG-START -->
+## package-a
+### 标题
+feat: 自定义标题（被跳过）
+### 变更日志
+- 第一条
+- 第二条
+<!-- RELEASE-LOG-END -->`;
+
+      const result = extractReleaseLog(body, defaultConfig);
+
+      expect(result.packageChangeLogs).toHaveLength(1);
+      expect(result.packageChangeLogs[0].packages).toEqual(['package-a']);
+      // `### 标题` 下方的非列表行（自定义标题）会被收集为通用文本
+      expect(result.packageChangeLogs[0].changeLog).toContain('第一条');
+      expect(result.packageChangeLogs[0].changeLog).toContain('第二条');
+    });
+  });
+
   describe('Edge cases', () => {
     it('should return empty when markers are missing', () => {
       const body = 'No markers here';

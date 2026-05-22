@@ -1,0 +1,44 @@
+name: release-collect
+
+# 可选的 CI 兜底：若不使用 @release-toolkit/app-server (Cloudflare Worker)，
+# 可改用本 workflow 在 PR 上调用 `release collect`，把日志写入 PR 描述体。
+# 工作流会读取 `.release-toolkit/config.json` 的 `branches.base`。
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    # 仅在 PR 的 base 分支匹配时执行（按需调整）
+    if: github.event.pull_request.base.ref == 'dev'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm -r build
+
+      - name: Collect PR log
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pnpm release collect \
+            --pr-number ${{ github.event.pull_request.number }} \
+            --owner ${{ github.repository_owner }} \
+            --repo ${{ github.event.repository.name }}

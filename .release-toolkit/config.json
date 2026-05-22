@@ -1,6 +1,7 @@
 {
-  "devBranch": "dev",
-  "productionBranch": "main",
+  "branches": {
+    "base": "dev"
+  },
   "prLogCollector": {
     "releaseLogMarker": {
       "start": "<!-- RELEASE-LOG-START -->",

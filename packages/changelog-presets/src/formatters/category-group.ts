@@ -1,11 +1,11 @@
-import type { ILogFormatter } from '@release-toolkit/core';
+import type { ChangelogFormatter } from '@release-toolkit/core';
 import { COMMIT_TYPE_CATEGORY } from '../constants.js';
 
 /**
  * Category group formatter
  * Groups changelog entries by commit type category
  */
-export const categoryGroup: ILogFormatter = {
+export const categoryGroup: ChangelogFormatter = {
   name: 'category-group',
   format: (entries: Array<{ type: string; scope?: string; subject: string }>) => {
     const grouped = new Map<string, typeof entries>();

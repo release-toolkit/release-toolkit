@@ -11,7 +11,7 @@ import { HookRunner } from '../../shared/hook-runner.js';
 import { IS_WORKER, OUTPUT_MARKERS, escapeRegex } from '../../shared/utils.js';
 import { formatTitleBullet, formatChangeLogBullets } from './package-log-format.js';
 
-const { OUTPUT_START, OUTPUT_END } = OUTPUT_MARKERS;
+const { START: OUTPUT_START, END: OUTPUT_END } = OUTPUT_MARKERS;
 
 /** 生成标记区的用户指南（使用引用格式，用户可见） */
 function generateSpecExplanation(): string {
@@ -43,28 +43,15 @@ function generateSpecExplanation(): string {
   return lines.join('\n');
 }
 
-/** GitHub REST API 返回的 PR 数据结构（部分字段） */
-type GitHubPRResponse = {
-  number: number;
-  title: string;
-  body: string | null;
-  base_ref: string;
-  head_ref: string;
-};
-
 async function fetchPRMeta(context: GithubContext): Promise<PRMeta> {
   const { data } = await getPR(context);
 
-  // getPR 返回 Record<string, unknown>，此处做单次类型断言
-  // 对应 GitHub REST API /pulls/{pull_number} 响应的已知字段
-  const prData = data as unknown as GitHubPRResponse;
-
   return {
-    number: prData.number,
-    title: prData.title,
-    body: prData.body ?? null,
-    baseRef: prData.base_ref,
-    headRef: prData.head_ref,
+    number: data.number ?? context.prNumber ?? 0,
+    title: data.title ?? '',
+    body: data.body ?? null,
+    baseRef: data.base?.ref ?? '',
+    headRef: data.head?.ref ?? '',
   };
 }
 
@@ -121,7 +108,7 @@ export async function collectPRLog(options: PRLogCollectorOptions): Promise<PRLo
 
     // 保存快照到 .release-toolkit/releases/（Worker 环境跳过）
     let savedPath: string | undefined;
-    if (options.save && !isWorker && rawReleaseLog) {
+    if (options.save && !IS_WORKER && rawReleaseLog) {
       savedPath = await saveSnapshot(meta.number, meta.title, rawReleaseLog, markdown, options.cwd);
     }
 

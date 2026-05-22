@@ -8,7 +8,13 @@ import { createGithubRelease } from '../features/release-publisher/github-releas
 vi.mock('../shared/config/index.js', () => ({
   loadConfig: vi.fn(() => ({
     branches: { base: 'main' },
+    releasePreview: {
+      workspaceFile: 'pnpm-workspace.yaml',
+      noChangeMessage: '⚠️ 无版本变更',
+    },
     releasePublisher: { createGithubRelease: true },
+    prLogCollector: {},
+    plugins: [],
   })),
 }));
 

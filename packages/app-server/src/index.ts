@@ -1,508 +1,718 @@
 /**
- * Release Toolkit - GitHub App Server
+ * Release Toolkit - GitHub App Server (Cloudflare Worker)
  *
- * 核心功能：
- * 1. 验证 GitHub Webhook 签名
- * 2. 处理 PR 生命周期事件
- * 3. 触发 prLogCollector、releasePreview、releasePublisher 工作流
+ * 职责：
+ * 1. 验证 GitHub Webhook 签名（按需）
+ * 2. 监听 pull_request / pull_request_review 事件
+ * 3. 与 `@release-toolkit/core` 的 CLI 输出保持一致的评论格式
+ * 4. 通过 workflow_dispatch 触发 CI 完成实际发布
  *
- * 工作流程：
- * - PR 首次提交 → prLogCollector（通知 + 预览 + 修改指南）
- * - PR 被 Approve → 日志写入 PR 描述体
- * - PR 合并到 main → releasePublisher（发布）
+ * 事件 → 行为：
+ * - pull_request.opened/reopened/synchronize/edited（base = RELEASE_BASE_BRANCH）
+ *     → upsert PR 评论：通知 + 版本 diff + 预览 + 修改指南
+ * - pull_request_review.submitted (state=approved)
+ *     → 把当前评论中的预览写入 PR 描述体（RELEASE-TOOLKIT-OUTPUT 标记区，幂等）
+ * - pull_request.closed (merged && base = RELEASE_BASE_BRANCH)
+ *     → 触发 release-publish workflow（由 CI 执行 @release-toolkit/core publishRelease）
  */
 
-import { Octokit, App, type Octokit as OctokitType } from 'octokit';
+import { App, Octokit, type Octokit as OctokitType } from 'octokit';
 
 // ============================================================================
-// 内联核心函数（避免依赖 Node.js API）
+// 环境与常量
 // ============================================================================
-
-/** 输出标记常量 */
-const OUTPUT_MARKERS = {
-  START: '<!-- RELEASE-TOOLKIT-OUTPUT-START -->',
-  END: '<!-- RELEASE-TOOLKIT-OUTPUT-END -->',
-} as const;
-
-const { START: OUTPUT_START, END: OUTPUT_END } = OUTPUT_MARKERS;
-
-/**
- * 解析 RELEASE-LOG 标记区内容
- * 支持格式 A/B/C
- */
-interface PackageChangeLog {
-  packages: string[];
-  changeLog: string;
-}
-
-interface ExtractResult {
-  packageChangeLogs: PackageChangeLog[];
-  rawReleaseLog: string | null;
-  bodyWithoutMarker: string;
-}
-
-/** 简化的配置类型 */
-interface SimpleConfig {
-  prLogCollector?: {
-    releaseLogMarker?: {
-      start?: string;
-      end?: string;
-    };
-  };
-}
-
-/**
- * 从 PR body 中提取 RELEASE-LOG 标记区内容
- */
-function extractReleaseLog(body: string | null, config: SimpleConfig): { rawReleaseLog: string | null } {
-  if (!body) {
-    return { rawReleaseLog: null };
-  }
-
-  const startMarker =
-    config.prLogCollector?.releaseLogMarker?.start ??
-    '<!-- RELEASE-LOG-START -->';
-  const endMarker =
-    config.prLogCollector?.releaseLogMarker?.end ??
-    '<!-- RELEASE-LOG-END -->';
-
-  const startIdx = body.indexOf(startMarker);
-  const endIdx = body.indexOf(endMarker);
-
-  if (startIdx === -1 || endIdx === -1 || startIdx >= endIdx) {
-    return { rawReleaseLog: null };
-  }
-
-  const releaseLog = body
-    .substring(startIdx + startMarker.length, endIdx)
-    .trim();
-
-  return { rawReleaseLog: releaseLog || null };
-}
 
 interface Env {
   GITHUB_APP_ID?: string;
   GITHUB_APP_PRIVATE_KEY?: string;
   GITHUB_WEBHOOK_SECRET?: string;
+  /** 触发收集 / 发布的目标分支（默认 dev） */
+  RELEASE_BASE_BRANCH?: string;
+  /** 合并后触发的 workflow 文件名（默认 release-publish.yml） */
+  RELEASE_PUBLISH_WORKFLOW?: string;
+  /**
+   * 控制评论输出区块：JSON 字符串
+   * 例：`{"notification":true,"preview":true,"editGuide":false}`
+   */
+  OUTPUT_SECTIONS?: string;
 }
+
+interface OutputSections {
+  notification: boolean;
+  preview: boolean;
+  editGuide: boolean;
+}
+
+const DEFAULT_OUTPUT_SECTIONS: OutputSections = {
+  notification: true,
+  preview: true,
+  editGuide: true,
+};
+
+function resolveOutputSections(env: Env): OutputSections {
+  if (!env.OUTPUT_SECTIONS) return { ...DEFAULT_OUTPUT_SECTIONS };
+  try {
+    const parsed = JSON.parse(env.OUTPUT_SECTIONS) as Partial<OutputSections>;
+    return {
+      notification: parsed.notification ?? DEFAULT_OUTPUT_SECTIONS.notification,
+      preview: parsed.preview ?? DEFAULT_OUTPUT_SECTIONS.preview,
+      editGuide: parsed.editGuide ?? DEFAULT_OUTPUT_SECTIONS.editGuide,
+    };
+  } catch (err) {
+    console.warn('[outputSections] 无法解析 OUTPUT_SECTIONS，使用默认值:', err);
+    return { ...DEFAULT_OUTPUT_SECTIONS };
+  }
+}
+
+const DEFAULT_BASE_BRANCH = 'dev';
+const DEFAULT_PUBLISH_WORKFLOW = 'release-publish.yml';
+
+const RELEASE_LOG_START = '<!-- RELEASE-LOG-START -->';
+const RELEASE_LOG_END = '<!-- RELEASE-LOG-END -->';
+const OUTPUT_START = '<!-- RELEASE-TOOLKIT-OUTPUT-START -->';
+const OUTPUT_END = '<!-- RELEASE-TOOLKIT-OUTPUT-END -->';
+const COMMENT_ANCHOR_START = '<!-- release-toolkit-comment-start -->';
+const COMMENT_ANCHOR_END = '<!-- release-toolkit-comment-end -->';
+
+const COMMIT_TYPE_EMOJI: Record<string, string> = {
+  feat: '✨',
+  fix: '🐛',
+  docs: '📝',
+  style: '💄',
+  refactor: '♻️',
+  perf: '⚡️',
+  test: '✅',
+  build: '📦️',
+  ci: '👷',
+  chore: '🔧',
+  revert: '⏪️',
+};
 
 // ============================================================================
 // 类型定义
 // ============================================================================
-
-interface GithubContext {
-  isGitHubActions: boolean;
-  eventName: string;
-  prNumber?: number;
-  repoOwner: string;
-  repoName: string;
-  token?: string;
-  /** Worker 环境下已认证的 octokit 实例 */
-  octokit?: OctokitType;
-}
-
-interface PRLogCollectorResult {
-  success: boolean;
-  prNumber: number;
-  prTitle: string;
-  changelog: string | null;
-  commentPosted: boolean;
-  savedPath?: string;
-  error?: string;
-}
-
-interface ReleasePublisherResult {
-  success: boolean;
-  releasesCreated: string[];
-  error?: string;
-}
 
 interface PullRequestPayload {
   action?: string;
   pull_request?: {
     number: number;
     title: string;
+    body?: string | null;
     merged?: boolean;
     base?: {
+      ref?: string;
       repo?: {
         owner?: { login?: string };
         name?: string;
       };
     };
     head?: {
-      repo?: {
-        owner?: { login?: string };
-        name?: string;
-      };
+      ref?: string;
+      sha?: string;
     };
+  };
+  review?: {
+    state?: string;
   };
   installation?: {
     id?: number;
   };
 }
 
-// ============================================================================
-// 工具函数
-// ============================================================================
-
-/**
- * 验证 Webhook 签名
- * GitHub 使用 HMAC-SHA1 或 HMAC-SHA256 算法
- * 注意：Edge Function 中 crypto.subtle 不支持 HMAC，暂时跳过验证
- */
-async function verifySignature(_secret: string, _signature: string, _body: string): Promise<boolean> {
-  // Edge Function 中 crypto.subtle 不支持 HMAC 签名
-  // 暂时跳过验证，允许所有请求通过
-  // 生产环境应该使用正确的 HMAC 实现（如 crypto-js）
-  console.warn('[verifySignature] HMAC not supported in Edge Function, skipping verification');
-  return true;
+interface PackageChangeLog {
+  packages: string[];
+  changeLog: string;
 }
 
-/**
- * 转义正则表达式特殊字符
- */
+interface VersionDiff {
+  packageName: string;
+  currentVersion: string;
+  newVersion: string;
+}
+
+interface PRContext {
+  owner: string;
+  repo: string;
+  prNumber: number;
+  prTitle: string;
+  prBody: string | null;
+  baseRef: string;
+  headRef: string;
+  headSha: string;
+}
+
+// ============================================================================
+// 工具函数（纯字符串处理，与 core 行为对齐）
+// ============================================================================
+
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/**
- * 根据事件类型从 payload 中提取 repo 信息
- */
-function extractRepoInfo(eventType: string, payload: Record<string, unknown>): { owner: string; repo: string } | null {
-  if (eventType === 'pull_request') {
-    const pr = payload.pull_request as PullRequestPayload['pull_request'];
-    if (!pr?.base?.repo) return null;
-    const repo = pr.base.repo;
-    return {
-      owner: repo.owner?.login ?? '',
-      repo: repo.name ?? '',
-    };
+function applyEmojiPrefix(line: string): string {
+  const match = line.match(/^-?\s*(\w+)(?:\([^)]+\))?:/);
+  if (match) {
+    const emoji = COMMIT_TYPE_EMOJI[match[1]];
+    if (emoji && !line.includes(emoji)) {
+      return line.replace(match[0], `${emoji} ${match[0]}`);
+    }
   }
+  return line;
+}
 
-  const repository = payload.repository as { owner?: { login?: string }; name?: string } | undefined;
-  if (!repository) return null;
+/** 将一段文本拆成 bullet 列表，已以 `-` 开头的行不重复添加前缀 */
+function toBulletLines(text: string): string[] {
+  const lines: string[] = [];
+  for (const raw of text.split('\n')) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    lines.push(trimmed.startsWith('-') ? trimmed : `- ${trimmed}`);
+  }
+  return lines;
+}
 
+function formatTitleBullet(title: string): string {
+  return applyEmojiPrefix(`- ${title}（标题）`);
+}
+
+function formatChangeLogBullets(changeLog: string): string[] {
+  const trimmed = changeLog.trim();
+  if (!trimmed) {
+    return ['- （无对应的变更日志）'];
+  }
+  return toBulletLines(trimmed).map(applyEmojiPrefix);
+}
+
+/**
+ * 解析 RELEASE-LOG 标记区，识别 `## pkg-a, pkg-b` 分组
+ *
+ * 支持两种用户写法：
+ * - `## pkg`（紧跟一个或多个普通行 / `### 子标题` 的列表）
+ * - 无 `##` 的纯列表（作为"通用变更"）
+ */
+function parseReleaseLog(content: string): PackageChangeLog[] {
+  const trimmed = content.trim();
+  if (!trimmed) return [];
+
+  const lines = trimmed.split('\n');
+  const result: PackageChangeLog[] = [];
+  let currentPackages: string[] = [];
+  let currentLines: string[] = [];
+  let started = false;
+
+  const flush = () => {
+    const log = currentLines.join('\n').trim();
+    if (!log) return;
+    result.push({ packages: [...currentPackages], changeLog: log });
+  };
+
+  for (const line of lines) {
+    const t = line.trim();
+    if (t.startsWith('## ') && !t.startsWith('### ')) {
+      if (started) flush();
+      currentPackages = t
+        .replace(/^## /, '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      currentLines = [];
+      started = true;
+      continue;
+    }
+    if (t.startsWith('### ')) {
+      // 兼容旧格式：跳过 `### 标题` / `### 变更日志` 这类副标题
+      continue;
+    }
+    if (started) {
+      currentLines.push(line);
+    } else {
+      // 处于第一个 `##` 之前的内容 → 视为通用变更
+      currentLines.push(line);
+    }
+  }
+  if (started) {
+    flush();
+  } else if (currentLines.join('\n').trim()) {
+    result.push({ packages: [], changeLog: currentLines.join('\n').trim() });
+  }
+  return result;
+}
+
+interface ExtractedReleaseLog {
+  rawReleaseLog: string | null;
+  packageChangeLogs: PackageChangeLog[];
+}
+
+function extractReleaseLog(body: string | null): ExtractedReleaseLog {
+  if (!body) return { rawReleaseLog: null, packageChangeLogs: [] };
+  const startIdx = body.indexOf(RELEASE_LOG_START);
+  const endIdx = body.indexOf(RELEASE_LOG_END);
+  if (startIdx === -1 || endIdx === -1 || startIdx >= endIdx) {
+    return { rawReleaseLog: null, packageChangeLogs: [] };
+  }
+  const raw = body.substring(startIdx + RELEASE_LOG_START.length, endIdx).trim();
   return {
-    owner: repository.owner?.login ?? '',
-    repo: repository.name ?? '',
+    rawReleaseLog: raw || null,
+    packageChangeLogs: parseReleaseLog(raw),
   };
 }
 
 // ============================================================================
-// PR Log Collector 工作流
+// GitHub API 包装
 // ============================================================================
 
-/**
- * PR 首次提交时收集变更日志
- */
-async function runPRLogCollector(
-  context: GithubContext,
-  prNumber: number,
-  prTitle: string,
-  _cwd?: string,
-): Promise<PRLogCollectorResult> {
-  console.log(`[prLogCollector] Processing PR #${prNumber}: ${prTitle}`);
-
-  // 获取 PR 描述体以提取已有的变更日志
-  let prBody: string | null = null;
-  try {
-    const octokit = new Octokit({ auth: context.token });
-    const { data } = await octokit.rest.pulls.get({
-      owner: context.repoOwner,
-      repo: context.repoName,
-      pull_number: prNumber,
-    });
-    prBody = (data as { body?: string | null }).body ?? null;
-    console.log(`[prLogCollector] PR body length: ${prBody?.length ?? 0}`);
-  } catch (err) {
-    console.error('[prLogCollector] Failed to get PR body:', err);
-  }
-
-  // Worker 环境下，直接生成通知评论
-  const notification = generatePRNotification(prNumber, prTitle);
-  const preview = generateLogPreview(prBody, prNumber);
-  const guide = generateEditGuide();
-
-  const body = `${notification}\n\n---\n\n${preview}\n\n---\n\n${guide}`;
-
-  try {
-    // Worker 环境使用已认证的 octokit 实例，否则使用 token
-    const octokit = context.octokit ?? new Octokit({ auth: context.token });
-    await octokit.rest.issues.createComment({
-      owner: context.repoOwner,
-      repo: context.repoName,
-      issue_number: prNumber,
-      body,
-    });
-
-    return {
-      success: true,
-      prNumber,
-      prTitle,
-      changelog: body,
-      commentPosted: true,
-    };
-  } catch (err) {
-    console.error('[prLogCollector] Error:', err);
-    return {
-      success: false,
-      prNumber,
-      prTitle,
-      changelog: body,
-      commentPosted: false,
-      error: err instanceof Error ? err.message : String(err),
-    };
-  }
-}
-
-/**
- * 生成 PR 通知
- */
-function generatePRNotification(prNumber: number, _prTitle: string): string {
-  return `👋 **PR #${prNumber} 变更日志预览**
-
-以下为自动生成的日志预览， approved 后写入。`;
-}
-
-/**
- * 生成日志预览（使用内联的 extractReleaseLog）
- */
-function generateLogPreview(prBody: string | null, _prNumber: number): string {
-  if (!prBody) {
-    return `${OUTPUT_START}\n${OUTPUT_END}`;
-  }
-
-  // 使用内联的 extractReleaseLog 提取变更日志
-  const { rawReleaseLog } = extractReleaseLog(prBody, {
-    prLogCollector: {},
+async function getPR(octokit: OctokitType, ctx: { owner: string; repo: string; prNumber: number }) {
+  const { data } = await octokit.rest.pulls.get({
+    owner: ctx.owner,
+    repo: ctx.repo,
+    pull_number: ctx.prNumber,
   });
-
-  if (!rawReleaseLog) {
-    return `${OUTPUT_START}\n${OUTPUT_END}`;
-  }
-
-  // 格式化为标准输出格式
-  return `${OUTPUT_START}\n${rawReleaseLog}\n${OUTPUT_END}`;
+  return data;
 }
 
-/**
- * 生成修改指南
- */
-function generateEditGuide(): string {
-  return `<details>
-<summary>如何修改日志</summary>
-
-在评论中**第一个回复**以下格式（替换为你的真实内容）：
-
-${OUTPUT_START}
-## 变更包
-- package-a: 1.0.0 → 1.1.0
-
----
-
-## package-a
-- feat: 自定义标题（标题）
-- 日志内容1
-- 日志内容2
-${OUTPUT_END}
-</details>`;
-}
-
-// ============================================================================
-// 日志写入触发（PR 被 Approve）
-// ============================================================================
-
-/**
- * PR 被 Approve 后，将确认的日志写入 PR 描述体
- */
-async function triggerLogWrite(
-  context: GithubContext,
-  prNumber: number,
-  _cwd?: string,
-): Promise<boolean> {
-  console.log(`[logWrite] Triggering log write for PR #${prNumber}`);
-
-  try {
-    // 使用 token 认证
-    const octokit = new Octokit({ auth: context.token });
-
-    // 获取当前 PR 描述体
-    const { data } = await octokit.rest.pulls.get({
-      owner: context.repoOwner,
-      repo: context.repoName,
-      pull_number: prNumber,
-    });
-    const currentBody = (data as { body?: string | null }).body ?? '';
-
-    // 生成确认后的日志内容
-    const confirmedLog = generateConfirmedLog(prNumber);
-
-    // 更新 PR 描述体（幂等操作）
-    let updatedBody: string;
-    if (currentBody.includes(OUTPUT_START) && currentBody.includes(OUTPUT_END)) {
-      // 替换现有标记区
-      updatedBody = currentBody.replace(
-        new RegExp(`${escapeRegex(OUTPUT_START)}[\\s\\S]*?${escapeRegex(OUTPUT_END)}`),
-        `${OUTPUT_START}\n${confirmedLog}\n${OUTPUT_END}`,
-      );
-    } else {
-      // 首次添加
-      updatedBody = `${currentBody}\n\n${OUTPUT_START}\n${confirmedLog}\n${OUTPUT_END}`;
+async function listChangedPackages(
+  octokit: OctokitType,
+  ctx: { owner: string; repo: string; prNumber: number },
+): Promise<string[]> {
+  const pkgs = new Set<string>();
+  // 单次请求最多 100 个文件；按页迭代
+  for await (const { data } of octokit.paginate.iterator(octokit.rest.pulls.listFiles, {
+    owner: ctx.owner,
+    repo: ctx.repo,
+    pull_number: ctx.prNumber,
+    per_page: 100,
+  })) {
+    for (const f of data) {
+      const m = f.filename.match(/^packages\/([^/]+)\/package\.json$/);
+      if (m) pkgs.add(m[1]);
     }
+  }
+  return Array.from(pkgs);
+}
 
-    await octokit.rest.pulls.update({
-      owner: context.repoOwner,
-      repo: context.repoName,
-      pull_number: prNumber,
-      body: updatedBody,
+async function getPackageJsonAtRef(
+  octokit: OctokitType,
+  owner: string,
+  repo: string,
+  pkgDir: string,
+  ref: string,
+): Promise<{ name?: string; version?: string } | null> {
+  try {
+    const { data } = await octokit.rest.repos.getContent({
+      owner,
+      repo,
+      path: `packages/${pkgDir}/package.json`,
+      ref,
     });
+    if (Array.isArray(data) || data.type !== 'file' || !('content' in data)) return null;
+    const decoded = atob(data.content.replace(/\n/g, ''));
+    const parsed = JSON.parse(decoded) as { name?: string; version?: string };
+    return parsed;
+  } catch {
+    return null;
+  }
+}
 
-    console.log(`[logWrite] Log written to PR #${prNumber}`);
+async function collectVersionDiffs(
+  octokit: OctokitType,
+  owner: string,
+  repo: string,
+  changedPkgs: string[],
+  baseRef: string,
+  headSha: string,
+): Promise<VersionDiff[]> {
+  const diffs: VersionDiff[] = [];
+  for (const dir of changedPkgs) {
+    const [basePkg, headPkg] = await Promise.all([
+      getPackageJsonAtRef(octokit, owner, repo, dir, baseRef),
+      getPackageJsonAtRef(octokit, owner, repo, dir, headSha),
+    ]);
+    if (!headPkg?.version) continue;
+    const current = basePkg?.version ?? '—';
+    const next = headPkg.version;
+    if (current === next) continue;
+    diffs.push({
+      packageName: headPkg.name ?? dir,
+      currentVersion: current,
+      newVersion: next,
+    });
+  }
+  return diffs;
+}
+
+async function findToolComment(
+  octokit: OctokitType,
+  ctx: { owner: string; repo: string; prNumber: number },
+): Promise<number | null> {
+  for await (const { data } of octokit.paginate.iterator(octokit.rest.issues.listComments, {
+    owner: ctx.owner,
+    repo: ctx.repo,
+    issue_number: ctx.prNumber,
+    per_page: 100,
+  })) {
+    for (const c of data) {
+      if (c.body?.includes(COMMENT_ANCHOR_START)) return c.id;
+    }
+  }
+  return null;
+}
+
+async function upsertPRComment(
+  octokit: OctokitType,
+  ctx: { owner: string; repo: string; prNumber: number },
+  body: string,
+): Promise<void> {
+  const wrapped = `${COMMENT_ANCHOR_START}\n${body}\n${COMMENT_ANCHOR_END}`;
+  const existingId = await findToolComment(octokit, ctx);
+  if (existingId) {
+    await octokit.rest.issues.updateComment({
+      owner: ctx.owner,
+      repo: ctx.repo,
+      comment_id: existingId,
+      body: wrapped,
+    });
+  } else {
+    await octokit.rest.issues.createComment({
+      owner: ctx.owner,
+      repo: ctx.repo,
+      issue_number: ctx.prNumber,
+      body: wrapped,
+    });
+  }
+}
+
+async function updatePRBody(
+  octokit: OctokitType,
+  ctx: { owner: string; repo: string; prNumber: number },
+  newBody: string,
+): Promise<void> {
+  await octokit.rest.pulls.update({
+    owner: ctx.owner,
+    repo: ctx.repo,
+    pull_number: ctx.prNumber,
+    body: newBody,
+  });
+}
+
+async function dispatchWorkflow(
+  octokit: OctokitType,
+  ctx: { owner: string; repo: string },
+  workflowFile: string,
+  ref: string,
+  inputs: Record<string, string>,
+): Promise<boolean> {
+  try {
+    await octokit.rest.actions.createWorkflowDispatch({
+      owner: ctx.owner,
+      repo: ctx.repo,
+      workflow_id: workflowFile,
+      ref,
+      inputs,
+    });
     return true;
   } catch (err) {
-    console.error(`[logWrite] Failed for PR #${prNumber}:`, err);
+    console.error('[dispatchWorkflow] failed:', err);
     return false;
   }
 }
 
-/**
- * 生成确认后的日志内容
- */
-function generateConfirmedLog(prNumber: number): string {
-  return `# PR #${prNumber} 变更日志（已确认）
+// ============================================================================
+// 评论 / 描述体内容构建
+// ============================================================================
 
-> ✅ 此日志已由团队确认，将用于 Release Notes
+function renderVersionDiffTable(diffs: VersionDiff[]): string {
+  if (diffs.length === 0) return '_（无版本变更）_';
+  const lines: string[] = [];
+  lines.push('| 包名 | 当前版本 | 新版本 |');
+  lines.push('| --- | --- | --- |');
+  for (const d of diffs) {
+    lines.push(`| \`${d.packageName}\` | ${d.currentVersion} | ${d.newVersion} |`);
+  }
+  return lines.join('\n');
+}
 
-## 变更包
+function renderPackageSection(
+  packageDir: string,
+  packageDisplayName: string,
+  prTitle: string,
+  changeLog: string,
+): string {
+  const lines: string[] = [];
+  const heading = packageDisplayName === packageDir
+    ? `## ${packageDir}`
+    : `## ${packageDisplayName}`;
+  lines.push(heading);
+  lines.push('');
+  lines.push(formatTitleBullet(prTitle));
+  for (const b of formatChangeLogBullets(changeLog)) {
+    lines.push(b);
+  }
+  return lines.join('\n');
+}
 
-*（从快照读取）*
+function buildPreviewMarkdown(
+  prCtx: PRContext,
+  changedPackages: string[],
+  versionDiffs: VersionDiff[],
+  parsedLogs: PackageChangeLog[],
+): string {
+  const lines: string[] = [];
 
----
+  // 标题
+  lines.push(`# PR #${prCtx.prNumber} 变更日志`);
+  lines.push('');
 
-## 变更详情
+  // 变更包列表
+  lines.push('## 变更包列表：');
+  lines.push('');
+  if (changedPackages.length === 0) {
+    lines.push('（无变更包）');
+  } else {
+    for (const pkg of changedPackages) {
+      const diff = versionDiffs.find((d) => d.packageName === pkg || d.packageName.endsWith(`/${pkg}`));
+      lines.push(
+        diff
+          ? `- \`${diff.packageName}\`：${diff.currentVersion} → ${diff.newVersion}`
+          : `- \`${pkg}\``,
+      );
+    }
+  }
+  lines.push('');
 
-*（从快照读取）*`;
+  // 计算 pkg → log 映射
+  const logMap = new Map<string, string>();
+  for (const { packages, changeLog } of parsedLogs) {
+    if (packages.length === 0) {
+      for (const pkg of changedPackages) logMap.set(pkg, changeLog);
+    } else {
+      for (const pkg of packages) logMap.set(pkg, changeLog);
+    }
+  }
+
+  // 每个包的章节
+  const targets = changedPackages.length > 0 ? changedPackages : ['__default__'];
+  for (const pkg of targets) {
+    const displayName =
+      pkg === '__default__'
+        ? '变更内容'
+        : versionDiffs.find((d) => d.packageName === pkg || d.packageName.endsWith(`/${pkg}`))?.packageName ?? pkg;
+    lines.push(renderPackageSection(pkg, displayName, prCtx.prTitle, logMap.get(pkg) ?? ''));
+    lines.push('');
+  }
+
+  return lines.join('\n').trim();
+}
+
+function buildEditGuide(): string {
+  return `<details>
+<summary>✏️ 如何修改变更日志</summary>
+
+在 **PR 描述体** 中追加以下标记区（替换为你的真实内容）：
+
+\`\`\`
+${RELEASE_LOG_START}
+## package-a
+- feat: 自定义标题（标题）
+- 新增功能说明
+- 修复内容说明
+
+## package-b
+- 此处可省略标题，工具会自动使用 PR 标题
+\`\`\`
+
+> 若无 \`## 包名\` 分组，工具会把列表视为所有变更包的通用日志。
+</details>`;
+}
+
+function buildPRComment(input: {
+  prCtx: PRContext;
+  changedPackages: string[];
+  versionDiffs: VersionDiff[];
+  parsedLogs: PackageChangeLog[];
+  sections: OutputSections;
+  approved?: boolean;
+}): string {
+  const { prCtx, changedPackages, versionDiffs, parsedLogs, sections, approved } = input;
+  const parts: string[] = [];
+
+  if (sections.notification) {
+    const status = approved ? '✅ **PR 已批准** —— 日志将写入 PR 描述体' : '📢 **PR 待审批**';
+    parts.push(status);
+    parts.push('');
+    parts.push('### 变更包版本');
+    parts.push('');
+    parts.push(renderVersionDiffTable(versionDiffs));
+  }
+
+  if (sections.preview) {
+    if (parts.length > 0) {
+      parts.push('');
+      parts.push('---');
+      parts.push('');
+    }
+    parts.push(buildPreviewMarkdown(prCtx, changedPackages, versionDiffs, parsedLogs));
+  }
+
+  if (sections.editGuide) {
+    if (parts.length > 0) {
+      parts.push('');
+      parts.push('---');
+      parts.push('');
+    }
+    parts.push(buildEditGuide());
+  }
+
+  if (parts.length === 0) {
+    parts.push('_release-toolkit: 所有输出区块均已关闭_');
+  }
+
+  return parts.join('\n');
+}
+
+function buildConfirmedReleaseLog(
+  prCtx: PRContext,
+  changedPackages: string[],
+  versionDiffs: VersionDiff[],
+  parsedLogs: PackageChangeLog[],
+): string {
+  return [
+    `# PR #${prCtx.prNumber} 变更日志（已确认）`,
+    '',
+    '> ✅ 此日志已通过 Review 确认，将用于发布 Release Notes',
+    '',
+    renderVersionDiffTable(versionDiffs),
+    '',
+    '---',
+    '',
+    buildPreviewMarkdown(prCtx, changedPackages, versionDiffs, parsedLogs),
+  ].join('\n');
+}
+
+function wrapOutputMarkers(content: string): string {
+  return `${OUTPUT_START}\n${content}\n${OUTPUT_END}`;
+}
+
+function upsertOutputInBody(currentBody: string | null, content: string): string {
+  const body = currentBody ?? '';
+  const wrapped = wrapOutputMarkers(content);
+  if (body.includes(OUTPUT_START) && body.includes(OUTPUT_END)) {
+    return body.replace(
+      new RegExp(`${escapeRegex(OUTPUT_START)}[\\s\\S]*?${escapeRegex(OUTPUT_END)}`),
+      wrapped,
+    );
+  }
+  return body.trim() ? `${body}\n\n${wrapped}` : wrapped;
 }
 
 // ============================================================================
-// Release Publisher 工作流
+// 业务流程
 // ============================================================================
 
-/**
- * PR 合并到 main 时执行发布
- */
-async function runReleasePublisher(
-  context: GithubContext,
-  _cwd?: string,
-): Promise<ReleasePublisherResult> {
-  console.log(`[releasePublisher] Processing release for ${context.repoOwner}/${context.repoName}`);
+async function buildPRContext(
+  octokit: OctokitType,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<PRContext> {
+  const pr = await getPR(octokit, { owner, repo, prNumber });
+  return {
+    owner,
+    repo,
+    prNumber,
+    prTitle: pr.title ?? '',
+    prBody: pr.body ?? null,
+    baseRef: pr.base?.ref ?? '',
+    headRef: pr.head?.ref ?? '',
+    headSha: pr.head?.sha ?? '',
+  };
+}
 
+async function runCollect(
+  octokit: OctokitType,
+  prCtx: PRContext,
+  sections: OutputSections,
+  approved = false,
+): Promise<{ ok: boolean; commentBody?: string; error?: string }> {
   try {
-    // TODO: 实现完整的 releasePublisher 逻辑
-    // 1. 扫描 packages/ 检测 version 变更
-    // 2. 按 version 创建 Git Tags
-    // 3. 创建 GitHub Release + Changelog
-    // 4. 执行 afterRelease 钩子
-
-    console.log(`[releasePublisher] Release triggered for ${context.repoOwner}/${context.repoName}`);
-
-    return {
-      success: true,
-      releasesCreated: [],
-    };
+    const changedPackages = await listChangedPackages(octokit, prCtx);
+    const versionDiffs = await collectVersionDiffs(
+      octokit,
+      prCtx.owner,
+      prCtx.repo,
+      changedPackages,
+      prCtx.baseRef,
+      prCtx.headSha,
+    );
+    const { packageChangeLogs } = extractReleaseLog(prCtx.prBody);
+    const commentBody = buildPRComment({
+      prCtx,
+      changedPackages,
+      versionDiffs,
+      parsedLogs: packageChangeLogs,
+      sections,
+      approved,
+    });
+    await upsertPRComment(octokit, prCtx, commentBody);
+    return { ok: true, commentBody };
   } catch (err) {
-    console.error('[releasePublisher] Error:', err);
-    return {
-      success: false,
-      releasesCreated: [],
-      error: err instanceof Error ? err.message : String(err),
-    };
+    console.error('[runCollect] failed:', err);
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 
-// ============================================================================
-// 事件处理器
-// ============================================================================
-
-/**
- * 处理 pull_request 事件
- */
-async function handlePullRequest(
-  payload: Record<string, unknown>,
-  context: GithubContext,
-  _env: Env,
-): Promise<Response> {
-  const prPayload = payload.pull_request as PullRequestPayload['pull_request'] | undefined;
-  const action = payload.action as string | undefined;
-  const prNumber = prPayload?.number;
-  const prTitle = prPayload?.title;
-  const isMerged = prPayload?.merged;
-
-  console.log(`[pull_request] action=${action}, pr=${prNumber}, merged=${isMerged}`);
-
-  // opened / reopened: prLogCollector
-  if (action === 'opened' || action === 'reopened') {
-    try {
-      const result = await runPRLogCollector(context, prNumber!, prTitle!, context.repoName);
-      return jsonResponse({ success: true, action: 'prLogCollector', result });
-    } catch (err) {
-      console.error('[pull_request] prLogCollector error:', err);
-      return jsonResponse({ success: false, error: String(err) }, 500);
-    }
+async function runConfirmAndWriteToBody(
+  octokit: OctokitType,
+  prCtx: PRContext,
+  sections: OutputSections,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const changedPackages = await listChangedPackages(octokit, prCtx);
+    const versionDiffs = await collectVersionDiffs(
+      octokit,
+      prCtx.owner,
+      prCtx.repo,
+      changedPackages,
+      prCtx.baseRef,
+      prCtx.headSha,
+    );
+    const { packageChangeLogs } = extractReleaseLog(prCtx.prBody);
+    const confirmedLog = buildConfirmedReleaseLog(prCtx, changedPackages, versionDiffs, packageChangeLogs);
+    const newBody = upsertOutputInBody(prCtx.prBody, confirmedLog);
+    if (newBody === prCtx.prBody) return { ok: true };
+    await updatePRBody(octokit, prCtx, newBody);
+    // 同时把通知评论刷新为「已批准」
+    await runCollect(octokit, { ...prCtx, prBody: newBody }, sections, true);
+    return { ok: true };
+  } catch (err) {
+    console.error('[runConfirmAndWriteToBody] failed:', err);
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
-
-  // synchronize / ready_for_review: 日志写入触发
-  if (action === 'synchronize' || action === 'ready_for_review') {
-    try {
-      const success = await triggerLogWrite(context, prNumber!, context.repoName);
-      return jsonResponse({ success, action: 'logWrite', prNumber });
-    } catch (err) {
-      console.error('[pull_request] logWrite error:', err);
-      return jsonResponse({ success: false, error: String(err) }, 500);
-    }
-  }
-
-  // closed (merged): releasePublisher
-  if (action === 'closed' && isMerged) {
-    try {
-      const result = await runReleasePublisher(context, context.repoName);
-      return jsonResponse({ success: true, action: 'releasePublisher', result });
-    } catch (err) {
-      console.error('[pull_request] releasePublisher error:', err);
-      return jsonResponse({ success: false, error: String(err) }, 500);
-    }
-  }
-
-  // 其他 action: 记录日志
-  console.log(`[pull_request] Ignored action: ${action}`);
-  return jsonResponse({ success: true, action: 'ignored', reason: 'no action needed' });
 }
 
-/**
- * 处理 push 事件
- */
-async function handlePush(
-  payload: Record<string, unknown>,
-  context: GithubContext,
-): Promise<Response> {
-  const ref = payload.ref as string | undefined;
-  console.log(`[push] ref=${ref}`);
-
-  // main 分支 push: 检查是否有新的 release tag
-  if (ref === `refs/heads/${context.repoName}` || ref?.startsWith('refs/tags/')) {
-    console.log('[push] Processing release tag push');
-  }
-
-  return jsonResponse({ success: true, action: 'push', ref });
+async function runTriggerRelease(
+  octokit: OctokitType,
+  prCtx: PRContext,
+  workflowFile: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const dispatched = await dispatchWorkflow(
+    octokit,
+    { owner: prCtx.owner, repo: prCtx.repo },
+    workflowFile,
+    prCtx.baseRef,
+    {
+      pr_number: String(prCtx.prNumber),
+      pr_title: prCtx.prTitle,
+    },
+  );
+  return dispatched
+    ? { ok: true }
+    : { ok: false, error: `Failed to dispatch ${workflowFile}` };
 }
 
 // ============================================================================
-// 主入口
+// 事件分发
 // ============================================================================
 
-/**
- * 创建 JSON 响应
- */
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
@@ -510,100 +720,191 @@ function jsonResponse(data: unknown, status = 200): Response {
   });
 }
 
+function expectedBaseBranch(env: Env): string {
+  return env.RELEASE_BASE_BRANCH || DEFAULT_BASE_BRANCH;
+}
+
+async function handlePullRequest(
+  payload: PullRequestPayload,
+  octokit: OctokitType,
+  env: Env,
+): Promise<Response> {
+  const action = payload.action;
+  const pr = payload.pull_request;
+  if (!pr) return jsonResponse({ success: true, status: 'no pull_request payload' });
+
+  const baseRef = pr.base?.ref ?? '';
+  const expected = expectedBaseBranch(env);
+  if (baseRef !== expected) {
+    return jsonResponse({
+      success: true,
+      status: 'skipped',
+      reason: `base ${baseRef} ≠ ${expected}`,
+    });
+  }
+
+  const owner = pr.base?.repo?.owner?.login ?? '';
+  const repo = pr.base?.repo?.name ?? '';
+  if (!owner || !repo) {
+    return jsonResponse({ success: false, error: 'missing repo in payload' }, 400);
+  }
+
+  const prCtx = await buildPRContext(octokit, owner, repo, pr.number);
+
+  // 合并 + base 命中 → 触发发布 workflow
+  if (action === 'closed' && pr.merged) {
+    const workflowFile = env.RELEASE_PUBLISH_WORKFLOW || DEFAULT_PUBLISH_WORKFLOW;
+    const result = await runTriggerRelease(octokit, prCtx, workflowFile);
+    return jsonResponse({
+      success: result.ok,
+      action: 'releasePublisher',
+      workflow: workflowFile,
+      error: result.error,
+    });
+  }
+
+  // 关闭但未合并 → 不处理
+  if (action === 'closed') {
+    return jsonResponse({ success: true, action: 'closed-unmerged', status: 'ignored' });
+  }
+
+  // 创建 / 同步 → upsert 评论
+  if (
+    action === 'opened' ||
+    action === 'reopened' ||
+    action === 'synchronize' ||
+    action === 'edited' ||
+    action === 'ready_for_review'
+  ) {
+    const sections = resolveOutputSections(env);
+    const result = await runCollect(octokit, prCtx, sections);
+    return jsonResponse({ success: result.ok, action: 'prLogCollector', error: result.error });
+  }
+
+  return jsonResponse({ success: true, action: action ?? 'unknown', status: 'ignored' });
+}
+
+async function handlePullRequestReview(
+  payload: PullRequestPayload,
+  octokit: OctokitType,
+  env: Env,
+): Promise<Response> {
+  const pr = payload.pull_request;
+  const review = payload.review;
+  if (!pr || !review) return jsonResponse({ success: true, status: 'no review payload' });
+  if (payload.action !== 'submitted' || review.state !== 'approved') {
+    return jsonResponse({ success: true, action: payload.action ?? '', status: 'ignored' });
+  }
+
+  const baseRef = pr.base?.ref ?? '';
+  const expected = expectedBaseBranch(env);
+  if (baseRef !== expected) {
+    return jsonResponse({ success: true, status: 'skipped', reason: `base ${baseRef} ≠ ${expected}` });
+  }
+
+  const owner = pr.base?.repo?.owner?.login ?? '';
+  const repo = pr.base?.repo?.name ?? '';
+  if (!owner || !repo) {
+    return jsonResponse({ success: false, error: 'missing repo in payload' }, 400);
+  }
+  const prCtx = await buildPRContext(octokit, owner, repo, pr.number);
+  const sections = resolveOutputSections(env);
+  const result = await runConfirmAndWriteToBody(octokit, prCtx, sections);
+  return jsonResponse({ success: result.ok, action: 'logWrite', error: result.error });
+}
+
+// ============================================================================
+// 入口
+// ============================================================================
+
+async function verifySignature(
+  secret: string,
+  signature: string,
+  body: string,
+): Promise<boolean> {
+  if (!signature.startsWith('sha256=')) return false;
+  try {
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign'],
+    );
+    const sigBytes = await crypto.subtle.sign('HMAC', key, encoder.encode(body));
+    const hex = Array.from(new Uint8Array(sigBytes))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+    return `sha256=${hex}` === signature;
+  } catch (err) {
+    console.error('[verifySignature] failed:', err);
+    return false;
+  }
+}
+
+async function acquireOctokit(
+  env: Env,
+  payload: { installation?: { id?: number } },
+): Promise<OctokitType | null> {
+  if (env.GITHUB_APP_ID && env.GITHUB_APP_PRIVATE_KEY && payload.installation?.id) {
+    try {
+      const app = new App({
+        appId: Number(env.GITHUB_APP_ID),
+        privateKey: env.GITHUB_APP_PRIVATE_KEY,
+      });
+      return await app.getInstallationOctokit(payload.installation.id);
+    } catch (err) {
+      console.error('[acquireOctokit] failed:', err);
+      return null;
+    }
+  }
+  return new Octokit();
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    // 1. 仅处理 POST 请求
     if (request.method !== 'POST') {
       return jsonResponse({ success: false, error: 'Method Not Allowed' }, 405);
     }
 
-    // 2. 验证配置（Worker 环境使用 token 认证，不需要 appId/privateKey）
-    // 注意：如果需要 App 认证，需要设置 GITHUB_APP_ID 和 GITHUB_APP_PRIVATE_KEY
+    const body = await request.text();
+    const eventType = request.headers.get('X-GitHub-Event') ?? '';
+    const signature = request.headers.get('X-Hub-Signature-256') ?? '';
+    const deliveryId = request.headers.get('X-GitHub-Delivery') ?? '';
+    console.log(`[webhook] ${eventType} delivery=${deliveryId}`);
+
+    if (env.GITHUB_WEBHOOK_SECRET) {
+      const ok = await verifySignature(env.GITHUB_WEBHOOK_SECRET, signature, body);
+      if (!ok) return jsonResponse({ success: false, error: 'Invalid signature' }, 401);
+    }
+
+    let payload: PullRequestPayload;
+    try {
+      payload = JSON.parse(body) as PullRequestPayload;
+    } catch {
+      return jsonResponse({ success: false, error: 'Invalid JSON' }, 400);
+    }
+
+    const octokit = await acquireOctokit(env, payload);
+    if (!octokit) {
+      return jsonResponse({ success: false, error: 'Unable to authenticate' }, 401);
+    }
 
     try {
-      // 3. 读取请求
-      const body = await request.text();
-      const eventType = request.headers.get('X-GitHub-Event') ?? '';
-      const signature = request.headers.get('X-Hub-Signature-256') ?? '';
-      const deliveryId = request.headers.get('X-GitHub-Delivery') ?? '';
-
-      console.log(`[webhook] ${eventType}.${deliveryId}`);
-
-      // 4. 验证签名（如果配置了 secret）
-      if (env.GITHUB_WEBHOOK_SECRET) {
-        const valid = await verifySignature(env.GITHUB_WEBHOOK_SECRET, signature, body);
-        if (!valid) {
-          console.error('[webhook] Signature verification failed');
-          return jsonResponse({ success: false, error: 'Invalid signature' }, 401);
-        }
-      }
-
-      // 5. 解析 payload
-      const payload = JSON.parse(body);
-
-      // 6. 提取 repo 信息
-      const repoInfo = extractRepoInfo(eventType, payload);
-      if (!repoInfo) {
-        console.error('[webhook] No repo info in payload');
-        return jsonResponse({ success: false, error: 'No repo info' }, 400);
-      }
-
-      // 获取 installation token
-      let token: string | undefined;
-      let authenticatedOctokit: GithubContext['octokit'];
-      if (env.GITHUB_APP_ID && env.GITHUB_APP_PRIVATE_KEY) {
-        try {
-          const app = new App({
-            appId: Number(env.GITHUB_APP_ID),
-            privateKey: env.GITHUB_APP_PRIVATE_KEY,
-          });
-          const installationId = payload.installation?.id as number | undefined;
-          console.log(`[webhook] payload.installation:`, JSON.stringify(payload.installation));
-          console.log(`[webhook] installationId:`, installationId);
-          if (installationId) {
-            // 使用 getInstallationOctokit 获取已认证的 octokit 实例
-            authenticatedOctokit = await app.getInstallationOctokit(installationId);
-            console.log(`[webhook] Got authenticated octokit for installation ${installationId}`);
-          }
-        } catch (err) {
-          console.error('[webhook] Failed to get installation octokit:', err);
-        }
-      }
-
-      const context: GithubContext = {
-        isGitHubActions: false,
-        eventName: eventType,
-        prNumber: payload.pull_request?.number as number | undefined,
-        repoOwner: repoInfo.owner,
-        repoName: repoInfo.repo,
-        token,
-        octokit: authenticatedOctokit,
-      };
-
-      console.log(`[webhook] Processing ${eventType} for ${repoInfo.owner}/${repoInfo.repo}`);
-
-      // 7. 分发到事件处理器
       switch (eventType) {
         case 'pull_request':
-          return await handlePullRequest(payload, context, env);
-
-        case 'push':
-          return await handlePush(payload, context);
-
-        case 'issues':
-        case 'issue_comment':
-          // 未来支持 issues 事件
-          console.log(`[webhook] Ignored event: ${eventType}`);
-          return jsonResponse({ success: true, event: eventType, status: 'ignored' });
-
+          return await handlePullRequest(payload, octokit, env);
+        case 'pull_request_review':
+          return await handlePullRequestReview(payload, octokit, env);
+        case 'ping':
+          return jsonResponse({ success: true, status: 'pong' });
         default:
-          console.log(`[webhook] Unknown event: ${eventType}`);
-          return jsonResponse({ success: true, event: eventType, status: 'unknown' });
+          return jsonResponse({ success: true, event: eventType, status: 'ignored' });
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error('[webhook] Error:', msg);
-      console.error('[webhook] Stack:', err instanceof Error ? err.stack : undefined);
+      console.error('[webhook] handler error:', msg);
       return jsonResponse({ success: false, error: msg }, 500);
     }
   },

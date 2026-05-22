@@ -154,7 +154,7 @@ async function detectVersionChangesLocal(
       const pkgInfo: PackageVersionInfo = {
         packageName: newPkg.name || pkgDir,
         packagePath: pkgDir,
-        currentVersion: newVersion,
+        currentVersion: oldVersion,
         newVersion,
       };
 
@@ -165,11 +165,16 @@ async function detectVersionChangesLocal(
   return diffs;
 }
 
+/**
+ * 把 workspace 配置项中的 glob 表达式（仅支持 `dir/*`）转换为绝对目录。
+ *
+ * 例：`['packages/*']` + `/project` → `['/project/packages']`
+ */
 export function resolvePackageDirs(patterns: string[], basePath: string): string[] {
   const dirs: string[] = [];
   for (const pattern of patterns) {
     if (pattern.endsWith('/*')) {
-      const base = pattern.replace(/\/$/, '');
+      const base = pattern.slice(0, -2);
       dirs.push(resolve(basePath, base));
     } else {
       dirs.push(resolve(basePath, pattern));

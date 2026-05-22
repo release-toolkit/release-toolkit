@@ -4,7 +4,6 @@ import type {
   ChangelogFormatter,
   IPlugin,
   ILogParser,
-  ILineFormatter,
 } from './types.js';
 
 /** 加载插件结果（同时返回 IPlugin 和 ChangelogFormatter） */
@@ -246,14 +245,14 @@ export function applyFormatters(
  */
 export function applyFormatLine(
   text: string,
-  formatters: (ILineFormatter & ChangelogFormatter)[],
+  formatters: ChangelogFormatter[],
 ): string {
   const lines = text.split('\n');
   return lines
     .map((line) => {
       let formatted = line;
       for (const formatter of formatters) {
-        if ('formatLine' in formatter) {
+        if (typeof formatter.formatLine === 'function') {
           formatted = formatter.formatLine(formatted);
         }
       }

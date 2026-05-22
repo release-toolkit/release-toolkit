@@ -28,7 +28,7 @@
 |--------|--------|------|------|
 | `branches.base` | `"dev"` | ✅ | 目标分支（PR 日志收集、版本预览与发布共用） |
 | `prLogCollector.releaseLogMarker` | `<!-- RELEASE-LOG-START/END -->` | ✅ | PR 日志标记 |
-| `prLogCollector.outputSections` | 全部启用 | ✅ | 控制输出哪些区块 |
+| `prLogCollector.outputSections` | 全部启用 | ⚠️ App Server 通过 `OUTPUT_SECTIONS` env 读取 | 控制评论的 notification / preview / editGuide 三段输出 |
 | `releasePreview.workspaceFile` | `"pnpm-workspace.yaml"` | ✅ | Monorepo 配置文件 |
 | `releasePreview.noChangeMessage` | 内置中文提示 | ✅ | 无版本变更时的提示 |
 | `releasePublisher.createGithubRelease` | `true` | ✅ | 是否创建 GitHub Release |

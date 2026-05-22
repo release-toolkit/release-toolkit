@@ -9,8 +9,8 @@ describe('Formatters', () => {
     });
 
     it('should handle different commit types', () => {
-      expect(markdownBold.formatLine('fix: bug fix')).toBe('🐛 fix: bug fix');
-      expect(markdownBold.formatLine('docs: update README')).toBe('📝 docs: update README');
+      expect(emojiPrefix.formatLine('fix: bug fix')).toBe('🐛 fix: bug fix');
+      expect(emojiPrefix.formatLine('docs: update README')).toBe('📝 docs: update README');
     });
 
     it('should return original line for unknown types', () => {

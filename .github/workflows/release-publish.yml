@@ -1,0 +1,50 @@
+name: release-publish
+
+# 由 @release-toolkit/app-server 在 PR 合并到 `branches.base` 时通过
+# `workflow_dispatch` 触发；也可手动从 Actions 页面运行。
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 合并的 PR 编号
+        required: false
+        type: string
+      pr_title:
+        description: 合并的 PR 标题
+        required: false
+        type: string
+
+permissions:
+  contents: write    # 创建 tag 与 release
+  pull-requests: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # 显式 checkout base 分支，使 publishRelease 能 git diff packages/*/package.json
+          ref: ${{ github.ref }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm -r build
+
+      - name: Publish releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          # 可选：npm publish 需要的 token
+          # NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm release publish

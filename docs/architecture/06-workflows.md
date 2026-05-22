@@ -16,7 +16,7 @@
 │   │       + 修改指南 │                └──────┬──────┘                         │
 │   └─────────────┘                          ↓                                │
 │        ↓                           ┌─────────────┐                         │
-│   保存快照到                        │  合并到 main  │                         │
+│   保存快照到                        │  合并到 dev   │                         │
 │   .release-toolkit/                 └──────┬──────┘                         │
 │   releases/                                ↓                                │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -25,7 +25,7 @@
 │                           发布流程                                           │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│   PR 合并到 main                                                             │
+│   PR 合并到 dev                                                              │
 │        ↓                                                                    │
 │   ┌─────────────────────────────────────────────────────────────────────┐   │
 │   │                    releasePublisher                                  │   │
@@ -73,8 +73,7 @@
 - 新增手机号登录
 
 ### package-b
-**PR 标题**: fix: 修复内存泄漏
-
+- fix: 修复内存泄漏（标题）
 - 修复定时器未清理问题
 ```
 
@@ -160,7 +159,8 @@ PR → dev (首次)
 
 ## 阶段二：PR 被 Approve — 日志写入
 
-**触发时机**：PR 被 Approve 后（可配置触发方式）
+**触发时机**：监听 GitHub Webhook `pull_request_review.submitted`（`state=approved`），
+且 PR 的 `base.ref` 与 `branches.base` 一致时触发。
 
 ### 输出内容
 
@@ -196,29 +196,35 @@ PR → dev (首次)
 ### 后台处理
 
 ```
-PR 被 Approve
+pull_request_review.submitted (state=approved, base=branches.base)
     ↓
-1. 读取之前保存的快照
-2. 格式化为标准日志格式
-3. 更新 PR 描述体（幂等操作）
-4. 删除临时快照
+1. 通过 GitHub API 拉取 PR meta + 变更包 + 版本 diff
+2. 解析 PR 描述体中 RELEASE-LOG 标记区
+3. 渲染为标准格式（## pkg + - title（标题） + bullets）
+4. 替换 PR 描述体 RELEASE-TOOLKIT-OUTPUT 标记区（幂等）
+5. 刷新通知评论为「已批准」状态
 ```
 
 ---
 
 ## 阶段三：发布流程 — releasePublisher
 
-**触发时机**：PR 合并到生产分支（如 `main`）
+**触发时机**：PR 合并到目标分支（默认 `dev`，由 `branches.base` 控制）。
+App Server 收到 `pull_request.closed` 且 `merged=true` 时，会通过
+`workflow_dispatch` 触发 CI（默认 `release-publish.yml`），由 Actions runner
+在带有 Node + git 的环境中调用 `@release-toolkit/core` 的 `publishRelease`。
 
 ### 发布流程
 
 ```
-PR 合并到 main
+PR 合并到 dev
+    ↓
+App Server: workflow_dispatch(release-publish.yml)
     ↓
 ┌─────────────────────────────────────────────────────────────┐
 │  Step 1: 扫描 packages/ 检测 version 变更                    │
-│  - 读取 main 分支的 package.json                            │
-│  - 读取 PR 的 package.json                                  │
+│  - 读取 base 分支的 package.json                            │
+│  - 读取 HEAD 的 package.json                                │
 │  - 对比找出有版本变更的包                                    │
 └─────────────────────────────────────────────────────────────┘
     ↓

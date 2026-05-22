@@ -4,12 +4,6 @@
   "description": "GitHub App webhook server for release-toolkit (Cloudflare Worker)",
   "type": "module",
   "main": "dist/index.mjs",
-  "pnpm": {
-    "overrides": {
-      "@cloudflare/unenv-preset": "1.0.0",
-      "unenv": "1.0.0"
-    }
-  },
   "scripts": {
     "dev": "pnpm build && wrangler dev",
     "build": "tsdown",

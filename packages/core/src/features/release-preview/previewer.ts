@@ -9,12 +9,12 @@ import { HookRunner } from '../../shared/hook-runner.js';
 import { formatReleasePreviewComment } from './formatter.js';
 import type { ReleasePreviewOptions, ReleasePreviewResult } from './types.js';
 import type { VersionDiffResult } from '../../shared/types.js';
-import { OUTPUT_MARKERS, escapeRegex } from '../../shared/utils.js';
+import { IS_WORKER, OUTPUT_MARKERS, escapeRegex } from '../../shared/utils.js';
 
 /**
  * 通过 API 获取聚合的 Release Logs
  */
-async function aggregateReleaseLogsByAPI(): Promise<string> {
+async function aggregateReleaseLogsByAPI(baseBranch: string): Promise<string> {
   const token = process.env.GITHUB_TOKEN || '';
   const owner = process.env.GITHUB_REPOSITORY?.split('/')[0] || '';
   const repo = process.env.GITHUB_REPOSITORY?.split('/')[1] || '';
@@ -24,11 +24,10 @@ async function aggregateReleaseLogsByAPI(): Promise<string> {
   }
 
   try {
-    // 获取已合并的 PR 列表
+    // 获取已合并到目标分支的 PR 列表
     const prs = await getPullRequests(
       { token, owner, repo },
-      'closed',
-      process.env.GITHUB_HEAD_REF_NAME || 'main',
+      { state: 'closed', base: baseBranch },
     );
 
     const mergedPrs = prs.filter((pr) => pr.merged === true);
@@ -38,7 +37,7 @@ async function aggregateReleaseLogsByAPI(): Promise<string> {
     }
 
     // 获取每个 PR 的日志（从 PR body 中提取 RELEASE-TOOLKIT-OUTPUT 区域）
-    const { OUTPUT_START, OUTPUT_END } = OUTPUT_MARKERS;
+    const { START: OUTPUT_START, END: OUTPUT_END } = OUTPUT_MARKERS;
 
     const releaseLogs: string[] = [];
 
@@ -104,14 +103,14 @@ export async function previewRelease(
     let versionDiffs: VersionDiffResult[];
     let aggregatedLog: string;
 
-    if (isWorker) {
+    if (IS_WORKER) {
       // Worker 环境使用 API
       versionDiffs = await detectVersionChanges(
         config.branches.base,
         process.env.GITHUB_HEAD_REF_NAME || 'HEAD',
         [config.releasePreview.workspaceFile],
       );
-      aggregatedLog = await aggregateReleaseLogsByAPI();
+      aggregatedLog = await aggregateReleaseLogsByAPI(config.branches.base);
     } else {
       // 本地环境使用文件系统
       const workspaceInfo = scanWorkspace(config.releasePreview.workspaceFile, options.cwd);
