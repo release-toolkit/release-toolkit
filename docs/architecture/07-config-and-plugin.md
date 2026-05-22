@@ -26,8 +26,7 @@
 
 | 配置项 | 默认值 | 状态 | 说明 |
 |--------|--------|------|------|
-| `branches.dev` | `"dev"` | ✅ | 触发 PR 日志收集的目标分支 |
-| `branches.production` | `"main"` | ✅ | 触发版本预览与发布的目标分支 |
+| `branches.base` | `"dev"` | ✅ | 目标分支（PR 日志收集、版本预览与发布共用） |
 | `prLogCollector.releaseLogMarker` | `<!-- RELEASE-LOG-START/END -->` | ✅ | PR 日志标记 |
 | `prLogCollector.outputSections` | 全部启用 | ✅ | 控制输出哪些区块 |
 | `releasePreview.workspaceFile` | `"pnpm-workspace.yaml"` | ✅ | Monorepo 配置文件 |
@@ -48,8 +47,7 @@
   "$schema": "https://ui.release-toolkit.dev/schema.json",
 
   "branches": {
-    "dev": "dev",
-    "production": "main"
+    "base": "dev"
   },
 
   "prLogCollector": {

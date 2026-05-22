@@ -7,7 +7,7 @@ import { createGithubRelease } from '../features/release-publisher/github-releas
 // Mock all dependencies
 vi.mock('../shared/config/index.js', () => ({
   loadConfig: vi.fn(() => ({
-    branches: { production: 'main' },
+    branches: { base: 'main' },
     releasePublisher: { createGithubRelease: true },
   })),
 }));

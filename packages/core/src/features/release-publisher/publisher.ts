@@ -31,7 +31,7 @@ export async function publishRelease(
   // 2. 检测版本变更
   const workspaceInfo = scanWorkspace(config.releasePreview.workspaceFile, cwd);
   const diffs = await detectVersionChanges(
-    config.branches.production,
+    config.branches.base,
     'HEAD',
     workspaceInfo.packages,
     cwd,

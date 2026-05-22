@@ -4,7 +4,7 @@ import type { ReleaseToolkitConfig } from '../shared/config/index.js';
 
 // Minimal config for testing
 const defaultConfig: ReleaseToolkitConfig = {
-  branches: { dev: 'dev', production: 'main' },
+  branches: { base: 'main' },
   prLogCollector: {
     releaseLogMarker: {
       start: '<!-- RELEASE-LOG-START -->',
@@ -135,7 +135,7 @@ More content`;
 
     it('should handle custom markers', () => {
       const config: ReleaseToolkitConfig = {
-        branches: { dev: 'dev', production: 'main' },
+        branches: { base: 'main' },
         prLogCollector: {
           releaseLogMarker: {
             start: '<!-- CUSTOM-START -->',

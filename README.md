@@ -8,20 +8,21 @@ CI 驱动的 **Monorepo 发布工具链** —— 自动收集 PR 变更日志、
 flowchart TD
     subgraph PR阶段
         A[PR → dev] --> B[prLogCollector]
-        B --> B1[提取 PR 标题 + 评论日志]
-        B1 --> B2[更新 PR 描述体]
-        B2 --> B3[保存快照到 .release-toolkit/]
+        B --> B1[提取 PR 标题 + 评论日志(特定格式截取)]
+        B1 --> B1a[PR 被 Approve]
+        B1a --> B2[更新 PR 描述体]
+        B2 --> B3[保存快照到 .release-toolkit/logs/]
     end
 
     subgraph 预览阶段
-        C[PR → main] --> D[releasePreview]
+        C[PR → dev] --> D[releasePreview]
         D --> D1{检测版本变更?}
         D1 -->|有变更| D2[聚合日志 + 评论预览]
         D1 -->|无变更| D3[评论无版本更新]
     end
 
     subgraph 发布阶段
-        E[PR 合并到 main] --> F[releasePublisher]
+        E[PR 合并到 dev] --> F[releasePublisher]
         F --> F1[beforePublish 钩子]
         F1 --> F2[beforeTag 钩子]
         F2 --> F3[创建 Git Tags]
@@ -126,8 +127,7 @@ graph LR
 ```json
 {
   "branches": {
-    "dev": "dev",
-    "production": "main"
+    "base": "dev"
   },
   "prLogCollector": {
     "releaseLogMarker": {

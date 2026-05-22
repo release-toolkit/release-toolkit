@@ -11,7 +11,7 @@ describe('Version Utils', () => {
 
     it('should have correct default values', async () => {
       const config = await loadConfig('/tmp/non-existent-path');
-      expect(config.branches).toEqual({ dev: 'dev', production: 'main' });
+      expect(config.branches).toEqual({ base: 'dev' });
     });
   });
 

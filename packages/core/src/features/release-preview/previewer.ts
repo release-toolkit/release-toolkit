@@ -107,7 +107,7 @@ export async function previewRelease(
     if (isWorker) {
       // Worker 环境使用 API
       versionDiffs = await detectVersionChanges(
-        config.branches.production,
+        config.branches.base,
         process.env.GITHUB_HEAD_REF_NAME || 'HEAD',
         [config.releasePreview.workspaceFile],
       );
@@ -116,7 +116,7 @@ export async function previewRelease(
       // 本地环境使用文件系统
       const workspaceInfo = scanWorkspace(config.releasePreview.workspaceFile, options.cwd);
       versionDiffs = await detectVersionChanges(
-        config.branches.production,
+        config.branches.base,
         'HEAD',
         Array.isArray(workspaceInfo.packages) ? workspaceInfo.packages : ([] as string[]),
         options.cwd,

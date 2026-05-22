@@ -6,9 +6,10 @@ import type { GithubContext, ReleaseHookContext, PRLogCollectorResult } from '..
 import { getPR, updatePR } from '../../shared/github/api-client.js';
 import { extractReleaseLog, type PackageChangeLog } from './release-log-extractor.js';
 import type { PRLogCollectorOptions, PRMeta } from './types.js';
-import { loadPlugins, loadPluginsAsIPlugin, applyFormatters, parseChangelog } from '../../shared/plugins/index.js';
+import { loadPlugins, loadPluginsAsIPlugin } from '../../shared/plugins/index.js';
 import { HookRunner } from '../../shared/hook-runner.js';
-import { OUTPUT_MARKERS, escapeRegex } from '../../shared/utils.js';
+import { IS_WORKER, OUTPUT_MARKERS, escapeRegex } from '../../shared/utils.js';
+import { formatTitleBullet, formatChangeLogBullets } from './package-log-format.js';
 
 const { OUTPUT_START, OUTPUT_END } = OUTPUT_MARKERS;
 
@@ -20,17 +21,17 @@ function generateSpecExplanation(): string {
     '> - 部分包共享日志，部分包独立：',
     '> ```',
     '> ## package-a, package-b',
-    '> ### 变更日志',
+    '> - feat: xxx（标题）',
     '> - 共同的变更内容',
     '>',
     '> ## package-c',
-    '> ### 变更日志',
+    '> - feat: xxx（标题）',
     '> - package-c 的独立变更',
     '> ```',
     '>',
     '> - 无包名声明（基于 `git diff packages/*/package.json`）：',
     '> ```',
-    '> ### 变更日志',
+    '> - feat: xxx（标题）',
     '> - 所有变更包的通用变更内容',
     '> ```',
     '>',
@@ -102,7 +103,7 @@ export async function collectPRLog(options: PRLogCollectorOptions): Promise<PRLo
       config,
     );
 
-    // 生成结构化 Markdown（Worker 环境跳过 git 操作）
+    const { formatters } = await loadPlugins();
     const markdown = await generateStructuredMarkdown(
       meta.number,
       meta.title,
@@ -111,7 +112,7 @@ export async function collectPRLog(options: PRLogCollectorOptions): Promise<PRLo
       meta.headRef,
       options.cwd,
       formatters,
-      isWorker,
+      IS_WORKER,
     );
 
     // 更新 PR 描述体（幂等）
@@ -210,21 +211,14 @@ async function generateStructuredMarkdown(
   // 为每个变更的包生成独立章节（或 Worker 环境下生成默认章节）
   const packagesToProcess = skipGitOps ? ['__default__'] : changedPackages;
   for (const pkg of packagesToProcess) {
-    lines.push('---');
-    lines.push('');
     lines.push(`## ${pkg === '__default__' ? '变更内容' : pkg}`);
     lines.push('');
-    lines.push('### 标题');
-    lines.push('');
-    lines.push(title);
-    lines.push('');
-    lines.push('### 变更日志');
-    lines.push('');
+    lines.push(formatTitleBullet(title, loadedFormatters));
 
-    const changeLog = packageLogMap.get(pkg) || '（无对应的变更日志）';
-    // 应用格式化器
-    const formattedLog = applyFormatters(parseChangelog(changeLog), loadedFormatters);
-    lines.push(formattedLog);
+    const changeLog = packageLogMap.get(pkg) ?? '';
+    for (const bullet of formatChangeLogBullets(changeLog, loadedFormatters)) {
+      lines.push(bullet);
+    }
     lines.push('');
   }
 

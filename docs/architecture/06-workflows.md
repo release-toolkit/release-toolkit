@@ -45,7 +45,7 @@
 
 ## 阶段一：PR 提交（首次）— prLogCollector
 
-**触发时机**：PR 首次提交到开发分支（如 `dev`）
+**触发时机**：PR 首次提交到目标分支（如 `dev`）
 
 ### 输出内容
 
@@ -68,8 +68,7 @@
 ## 📝 变更日志预览
 
 ### package-a
-**PR 标题**: feat: 新增登录功能
-
+- feat: 新增登录功能（标题）
 - 新增微信登录
 - 新增手机号登录
 
@@ -89,10 +88,7 @@
 ```
 <!-- RELEASE-LOG-START -->
 ## package-a
-### 标题
-自定义标题
-
-### 变更日志
+- feat: 自定义标题（标题）
 - 日志内容1
 - 日志内容2
 <!-- RELEASE-LOG-END -->
@@ -121,14 +117,12 @@
 ## 📝 变更日志预览
 
 ### @myapp/auth
-**PR 标题**: feat: 新增登录功能
-
+- feat: 新增登录功能（标题）
 - 新增微信登录
 - 新增手机号登录
 
 ### @myapp/utils
-**PR 标题**: fix: 修复内存泄漏
-
+- fix: 修复内存泄漏（标题）
 - 修复定时器未清理问题
 
 ---
@@ -139,10 +133,7 @@
 
 <!-- RELEASE-LOG-START -->
 ## @myapp/auth
-### 标题
-自定义标题
-
-### 变更日志
+- feat: 自定义标题（标题）
 - 日志内容1
 - 日志内容2
 <!-- RELEASE-LOG-END -->
@@ -186,22 +177,14 @@ PR → dev (首次)
 ---
 
 ## @myapp/auth
-
-### 标题
-feat: 新增登录功能
-
-### 变更日志
+- feat: 新增登录功能（标题）
 - 新增微信登录
 - 新增手机号登录
 
 ---
 
 ## @myapp/utils
-
-### 标题
-fix: 修复内存泄漏
-
-### 变更日志
+- fix: 修复内存泄漏（标题）
 - 修复定时器未清理问题
 <!-- RELEASE-LOG-END -->
 
@@ -336,8 +319,7 @@ PR 合并到 main
   "$schema": "https://ui.release-toolkit.dev/schema.json",
   
   "branches": {
-    "dev": "dev",
-    "production": "main"
+    "base": "dev"
   },
   
   "prLogCollector": {

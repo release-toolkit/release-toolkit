@@ -85,13 +85,11 @@ export interface GitTagsConfig {
 }
 
 /**
- * 分支配置
+ * 分支配置（对象格式，便于后续扩展）
  */
 export interface BranchesConfig {
-  /** 触发 PR 日志收集的目标分支 */
-  dev: string;
-  /** 触发版本预览与发布的目标分支 */
-  production: string;
+  /** 目标分支（PR 日志收集、版本预览与发布共用） */
+  base: string;
 }
 
 /**
@@ -167,8 +165,7 @@ const CONFIG_FILE = 'config.json';
 
 const DEFAULT_CONFIG: ReleaseToolkitConfig = {
   branches: {
-    dev: 'dev',
-    production: 'main',
+    base: 'dev',
   },
   prLogCollector: {
     releaseLogMarker: {
