@@ -8,9 +8,8 @@ CI 驱动的 **Monorepo 发布工具链** —— 自动收集 PR 变更日志、
 flowchart TD
     subgraph PR阶段
         A[PR → dev] --> B[prLogCollector]
-        B --> B1[提取 PR 标题 + 评论日志(特定格式截取)]
-        B1 --> B1a[PR 被 Approve]
-        B1a --> B2[更新 PR 描述体]
+        B --> B1[提取 PR 标题 + 评论日志]
+        B1 --> B2[更新 PR 描述体]
         B2 --> B3[保存快照到 .release-toolkit/releases/]
     end
 
@@ -36,21 +35,70 @@ flowchart TD
     D3 --> E
 ```
 
+## 三大核心命令
+
+| 命令 | 功能 | 触发时机 |
+|------|------|----------|
+| `release collect` | 收集 PR 日志，写入 PR 描述体 | PR 提交时 |
+| `release preview` | 版本发布预览，检测版本变更并评论 | PR 预览时 |
+| `release publish` | 创建 Git Tag + GitHub Release + 执行钩子 | PR 合并时 |
+
+## CLI 使用
+
+### collect —— PR 日志收集
+
+```bash
+$ release collect --pr-number 123 --owner my-org --repo my-repo
+$ release collect --pr-number 123 --owner my-org --repo my-repo --no-save
+$ release collect --pr-number 123 --owner my-org --repo my-repo --config-path ./config.release.json
+```
+
+| 选项 | 说明 | 默认值 |
+|------|------|--------|
+| `--pr-number` | PR 编号 | 必填 |
+| `--owner` | 仓库所有者 | 必填 |
+| `--repo` | 仓库名称 | 必填 |
+| `--token` | GitHub Token | `GITHUB_TOKEN` 环境变量 |
+| `--save` | 保存快照到 `.release-toolkit/releases/` | `true` |
+| `--no-save` | 不保存快照 | - |
+| `--cwd` | 工作目录 | `process.cwd()` |
+| `--config-path` | 配置文件路径 | `.release-toolkit/config.json` |
+
+### preview —— 版本发布预览
+
+```bash
+$ release preview --pr-number 123 --owner my-org --repo my-repo
+```
+
+| 选项 | 说明 | 默认值 |
+|------|------|--------|
+| `--pr-number` | PR 编号 | 必填 |
+| `--owner` | 仓库所有者 | 必填 |
+| `--repo` | 仓库名称 | 必填 |
+| `--token` | GitHub Token | `GITHUB_TOKEN` 环境变量 |
+| `--cwd` | 工作目录 | `process.cwd()` |
+| `--config-path` | 配置文件路径 | `.release-toolkit/config.json` |
+
+### publish —— 版本发布
+
+```bash
+$ release publish                              # 由 CI 自动触发（推荐）
+$ release publish --dry-run                    # 本地预演（不创建任何资源）
+$ release publish --owner my-org --repo my-repo # 显式指定仓库
+```
+
+| 选项 | 说明 | 默认值 |
+|------|------|--------|
+| `--owner` | 仓库所有者 | 从 `GITHUB_REPOSITORY` 读取 |
+| `--repo` | 仓库名称 | 从 `GITHUB_REPOSITORY` 读取 |
+| `--token` | GitHub Token | `GITHUB_TOKEN` 环境变量 |
+| `--dry-run` | 空跑模式 | `false` |
+| `--cwd` | 工作目录 | `process.cwd()` |
+| `--config-path` | 配置文件路径 | `.release-toolkit/config.json` |
+
 ## 生命周期钩子
 
 ### releasePublisher 钩子
-
-发布流程中可插入自定义逻辑的关键节点：
-
-```mermaid
-flowchart TD
-    A[beforePublish] --> B[检测版本变更]
-    B --> C[beforeTag]
-    C --> D[创建 Git Tags]
-    D --> E[创建 GitHub Release]
-    E --> F[afterRelease]
-    F --> G[afterPublish]
-```
 
 | 钩子 | 触发时机 | 用途 |
 |------|----------|------|
@@ -73,7 +121,7 @@ flowchart TD
 | `beforePreview` | 预览生成前 |
 | `afterPreview` | 预览生成后 |
 
-## Hook 执行方式
+## 钩子执行方式
 
 支持三种执行方式：
 
@@ -107,10 +155,10 @@ flowchart TD
 packages/
 ├── types/             # 共享类型定义（打破 core ↔ presets 循环依赖）
 ├── markdown/          # 共享 Markdown 工具（列表、RELEASE-LOG 解析、emoji）
-├── core/              # 核心引擎（功能模块 + 共享工具）
-├── cli/               # CLI 入口（release 命令）
-├── changelog-presets/ # Changelog 格式化预设
-└── app-server/        # Cloudflare Worker 服务端
+├── core/              # 核心引擎（版本检测、PR 日志收集、发布预览、发布器）
+├── cli/               # CLI 入口（release collect/preview/publish 命令）
+├── changelog-presets/ # Changelog 格式化预设（emoji-prefix, category-group, markdown-bold）
+└── app-server/        # GitHub App Webhook 服务（Cloudflare Worker）
 ```
 
 ## 依赖关系
@@ -120,13 +168,12 @@ graph LR
     CLI["@release-toolkit/cli"] --> Core["@release-toolkit/core"]
     Core --> Types["@release-toolkit/types"]
     Core --> Markdown["@release-toolkit/markdown"]
-    AppServer["@release-toolkit/app-server"] --> Markdown
+    AppServer["@release-toolkit/app-server"] --> Core
+    AppServer --> Markdown
     Presets["@release-toolkit/changelog-presets"] --> Types
     Presets --> Markdown
     AppServer -.->|独立| Env[Cloudflare Workers]
 ```
-
-CLI 支持 `--config-path` 指定配置文件（默认 `.release-toolkit/config.json`）。
 
 ## 配置
 
@@ -141,10 +188,25 @@ CLI 支持 `--config-path` 指定配置文件（默认 `.release-toolkit/config.
     "releaseLogMarker": {
       "start": "<!-- RELEASE-LOG-START -->",
       "end": "<!-- RELEASE-LOG-END -->"
+    },
+    "outputSections": {
+      "notification": true,
+      "preview": true,
+      "editGuide": true
+    },
+    "logExtraction": {
+      "source": "comment",
+      "commentPosition": "first"
     }
   },
   "releasePreview": {
-    "workspaceFile": "pnpm-workspace.yaml"
+    "workspaceFile": "pnpm-workspace.yaml",
+    "noChangeMessage": "⚠️ 本次 PR 未检测到任何包的版本变更",
+    "previewOutput": {
+      "showVersionDiff": true,
+      "showPackageList": true,
+      "showChangelog": true
+    }
   },
   "releasePublisher": {
     "createGithubRelease": true,
@@ -159,6 +221,74 @@ CLI 支持 `--config-path` 指定配置文件（默认 `.release-toolkit/config.
   "plugins": ["emoji-prefix", "category-group", "markdown-bold"]
 }
 ```
+
+### 配置字段说明
+
+#### 分支配置
+
+| 字段 | 说明 | 默认值 |
+|------|------|--------|
+| `branches.base` | 目标分支（PR 日志收集、版本预览与发布共用） | `dev` |
+
+#### PR 日志收集器配置
+
+| 字段 | 说明 | 默认值 |
+|------|------|--------|
+| `prLogCollector.releaseLogMarker.start` | 日志标记开始 | `<!-- RELEASE-LOG-START -->` |
+| `prLogCollector.releaseLogMarker.end` | 日志标记结束 | `<!-- RELEASE-LOG-END -->` |
+| `prLogCollector.outputSections.notification` | 是否显示通知区块 | `true` |
+| `prLogCollector.outputSections.preview` | 是否显示预览区块 | `true` |
+| `prLogCollector.outputSections.editGuide` | 是否显示编辑指南 | `true` |
+| `prLogCollector.logExtraction.source` | 日志提取来源（`comment` / `pr-body`） | `comment` |
+| `prLogCollector.logExtraction.commentPosition` | 评论位置（`first` / `latest`） | `first` |
+
+#### 发布预览配置
+
+| 字段 | 说明 | 默认值 |
+|------|------|--------|
+| `releasePreview.workspaceFile` | Monorepo 配置文件 | `pnpm-workspace.yaml` |
+| `releasePreview.noChangeMessage` | 无版本变更时的提示 | `⚠️ 本次 PR 未检测到任何包的版本变更...` |
+
+#### 发布器配置
+
+| 字段 | 说明 | 默认值 |
+|------|------|--------|
+| `releasePublisher.createGithubRelease` | 是否创建 GitHub Release | `true` |
+| `releasePublisher.gitTags.format` | Tag 格式（支持 `{packageName}` 和 `{version}` 占位符） | `{packageName}@{version}` |
+| `releasePublisher.gitTags.message` | Release message 格式 | `Release {packageName}@{version}` |
+
+#### 插件
+
+| 插件名 | 功能 |
+|--------|------|
+| `emoji-prefix` | 根据 commit 类型添加 emoji 前缀 |
+| `category-group` | 按 commit 类型分组 |
+| `markdown-bold` | 将 scope 加粗显示 |
+
+## App Server（GitHub App）
+
+`@release-toolkit/app-server` 是一个 Cloudflare Worker，用于接收 GitHub Webhook 事件并触发 CI 流程。
+
+### 支持的事件
+
+| 事件 | 行为 |
+|------|------|
+| `pull_request` (opened/reopened/synchronize/edited/ready_for_review) | 收集 PR 日志并评论 |
+| `pull_request` (closed + merged) | 触发 `release-publish` workflow |
+| `pull_request_review` (submitted + approved) | 将确认后的日志写入 PR 描述体 |
+| `repository_dispatch` | 手动重试入口 |
+
+### 环境变量
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `GITHUB_APP_ID` | GitHub App ID | - |
+| `GITHUB_APP_PRIVATE_KEY` | GitHub App 私钥 | - |
+| `GITHUB_TOKEN` | GitHub Token | - |
+| `GITHUB_WEBHOOK_SECRET` | Webhook 签名密钥 | - |
+| `RELEASE_BASE_BRANCH` | 目标分支 | `dev` |
+| `RELEASE_PUBLISH_WORKFLOW` | 发布 workflow 文件名 | `release-publish.yml` |
+| `OUTPUT_SECTIONS` | 输出区块配置（JSON） | - |
 
 ## License
 
