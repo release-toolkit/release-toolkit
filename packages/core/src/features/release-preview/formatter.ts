@@ -106,7 +106,7 @@ export function formatReleasePreviewComment(
     lines.push('### 操作提示');
     lines.push('');
     lines.push('- 需要你对 PR 进行批准（Approve）');
-    lines.push('- 如需修改变更日志，请编辑 PR 描述：');
+    lines.push('- 如需修改变更日志，请在 PR 评论或描述体中使用 RELEASE-LOG 标记区：');
     lines.push('');
     lines.push('```');
     lines.push('<!-- RELEASE-LOG-START -->');

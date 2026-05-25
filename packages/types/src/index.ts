@@ -156,7 +156,10 @@ export interface PRLogCollectorResult {
   prNumber: number;
   prTitle: string;
   changelog: string;
+  /** @deprecated 与 bodyUpdated 同义；collect 写 PR 描述体，不发评论 */
   commentPosted: boolean;
+  /** 是否已更新 PR 描述体 OUTPUT 区 */
+  bodyUpdated: boolean;
   savedPath?: string;
   error?: string;
 }

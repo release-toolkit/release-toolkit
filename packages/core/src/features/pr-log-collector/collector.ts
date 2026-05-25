@@ -127,7 +127,9 @@ export async function collectPRLog(options: PRLogCollectorOptions): Promise<PRLo
       prNumber: meta.number,
       prTitle: meta.title,
       changelog: rawReleaseLog || '',
+      /** @deprecated 与 bodyUpdated 同义，保留以兼容旧集成 */
       commentPosted: true,
+      bodyUpdated: true,
       savedPath,
     };
 
@@ -142,6 +144,7 @@ export async function collectPRLog(options: PRLogCollectorOptions): Promise<PRLo
       prTitle: '',
       changelog: '',
       commentPosted: false,
+      bodyUpdated: false,
       error: err instanceof Error ? err.message : String(err),
     };
   }

@@ -1,12 +1,10 @@
+import { isToolCommentBody, wrapToolComment } from '@release-toolkit/markdown';
 import type { GithubContext } from '../types.js';
 import {
   createPRComment,
   getPRComments,
   updatePRComment,
 } from './api-client.js';
-
-const DEFAULT_START = '<!-- release-toolkit-report-start -->';
-const DEFAULT_END = '<!-- release-toolkit-report-end -->';
 
 export interface PRCommenterOptions {
   markerStart?: string;
@@ -18,24 +16,24 @@ export async function postOrUpdateComment(
   body: string,
   options?: PRCommenterOptions,
 ): Promise<void> {
-  const start = options?.markerStart ?? DEFAULT_START;
-  const end = options?.markerEnd ?? DEFAULT_END;
-
-  const wrappedBody = `${start}\n${body}\n${end}`;
+  const customStart = options?.markerStart;
+  const customEnd = options?.markerEnd;
+  const wrappedBody =
+    customStart && customEnd
+      ? `${customStart}\n${body}\n${customEnd}`
+      : wrapToolComment(body);
 
   const { data: comments } = await getPRComments(context);
 
   const existing = comments.find((c) => {
     const bodyStr = (c as Record<string, unknown>).body as string;
-    return typeof bodyStr === 'string' && bodyStr.includes(start);
+    if (typeof bodyStr !== 'string') return false;
+    if (customStart) return bodyStr.includes(customStart);
+    return isToolCommentBody(bodyStr);
   });
 
   if (existing) {
-    await updatePRComment(
-      context,
-      existing.id as number,
-      wrappedBody,
-    );
+    await updatePRComment(context, existing.id as number, wrappedBody);
   } else {
     await createPRComment(context, wrappedBody);
   }

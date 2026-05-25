@@ -65,4 +65,21 @@ describe('resolveReleaseLogText', () => {
     const parsed = parseReleaseLogFromText(text, DEFAULT_CONFIG);
     expect(parsed.packageChangeLogs[0]?.changeLog).toContain('from comment');
   });
+
+  it('body 已有 RELEASE-LOG 时不请求评论 API', async () => {
+    const body = '<!-- RELEASE-LOG-START -->\n## pkg\n- in body\n<!-- RELEASE-LOG-END -->';
+    const text = await resolveReleaseLogText(
+      body,
+      {
+        isGitHubActions: true,
+        eventName: 'pull_request',
+        prNumber: 1,
+        repoOwner: 'o',
+        repoName: 'r',
+      },
+      DEFAULT_CONFIG,
+    );
+    expect(text).toBe(body);
+    expect(getPRComments).not.toHaveBeenCalled();
+  });
 });

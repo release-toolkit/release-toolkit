@@ -18,20 +18,19 @@
  *     → 手动重试入口；通过 `gh api .../dispatches` 触发同样的处理流程
  */
 
-import { App, Octokit, type Octokit as OctokitType } from 'octokit';
+import { isToolCommentBody, wrapToolComment } from '@release-toolkit/markdown';
 import {
-  COMMENT_ANCHOR_START,
-  COMMENT_ANCHOR_END,
   type OutputSections,
   type PRContext,
   buildPRComment,
   buildConfirmedReleaseLog,
-  extractReleaseLog,
   resolveOutputSections,
   outputSectionsFromRepoConfig,
   upsertOutputInBody,
 } from './format.js';
 import { resolvePRVersionState } from './version-resolve.js';
+import { resolveReleaseLogForPR } from './log-resolve.js';
+import { createGitHubClient, type GitHubClient } from './github-client.js';
 
 // ============================================================================
 // 环境与常量
@@ -40,6 +39,7 @@ import { resolvePRVersionState } from './version-resolve.js';
 interface Env {
   GITHUB_APP_ID?: string;
   GITHUB_APP_PRIVATE_KEY?: string;
+  GITHUB_TOKEN?: string;
   GITHUB_WEBHOOK_SECRET?: string;
   /** 触发收集 / 发布的目标分支（默认 dev） */
   RELEASE_BASE_BRANCH?: string;
@@ -114,81 +114,76 @@ interface RepositoryDispatchPayload {
 // GitHub API 包装
 // ============================================================================
 
-async function getPR(octokit: OctokitType, ctx: { owner: string; repo: string; prNumber: number }) {
-  const { data } = await octokit.rest.pulls.get({
-    owner: ctx.owner,
-    repo: ctx.repo,
-    pull_number: ctx.prNumber,
-  });
-  return data;
+async function getPR(client: GitHubClient, ctx: { owner: string; repo: string; prNumber: number }) {
+  return client.getPullRequest(ctx);
 }
 
 async function findToolComment(
-  octokit: OctokitType,
+  client: GitHubClient,
   ctx: { owner: string; repo: string; prNumber: number },
 ): Promise<number | null> {
-  for await (const { data } of octokit.paginate.iterator(octokit.rest.issues.listComments, {
+  const comments = await client.listIssueComments({
     owner: ctx.owner,
     repo: ctx.repo,
-    issue_number: ctx.prNumber,
-    per_page: 100,
-  })) {
-    for (const c of data) {
-      if (c.body?.includes(COMMENT_ANCHOR_START)) return c.id;
+    issueNumber: ctx.prNumber,
+  });
+  for (const comment of comments) {
+    if (isToolCommentBody(comment.body) && typeof comment.id === 'number') {
+      return comment.id;
     }
   }
   return null;
 }
 
 async function upsertPRComment(
-  octokit: OctokitType,
+  client: GitHubClient,
   ctx: { owner: string; repo: string; prNumber: number },
   body: string,
 ): Promise<void> {
-  const wrapped = `${COMMENT_ANCHOR_START}\n${body}\n${COMMENT_ANCHOR_END}`;
-  const existingId = await findToolComment(octokit, ctx);
+  const wrapped = wrapToolComment(body);
+  const existingId = await findToolComment(client, ctx);
   if (existingId) {
-    await octokit.rest.issues.updateComment({
+    await client.updateIssueComment({
       owner: ctx.owner,
       repo: ctx.repo,
-      comment_id: existingId,
+      commentId: existingId,
       body: wrapped,
     });
   } else {
-    await octokit.rest.issues.createComment({
+    await client.createIssueComment({
       owner: ctx.owner,
       repo: ctx.repo,
-      issue_number: ctx.prNumber,
+      issueNumber: ctx.prNumber,
       body: wrapped,
     });
   }
 }
 
 async function updatePRBody(
-  octokit: OctokitType,
+  client: GitHubClient,
   ctx: { owner: string; repo: string; prNumber: number },
   newBody: string,
 ): Promise<void> {
-  await octokit.rest.pulls.update({
+  await client.updatePullRequest({
     owner: ctx.owner,
     repo: ctx.repo,
-    pull_number: ctx.prNumber,
+    prNumber: ctx.prNumber,
     body: newBody,
   });
 }
 
 async function dispatchWorkflow(
-  octokit: OctokitType,
+  client: GitHubClient,
   ctx: { owner: string; repo: string },
   workflowFile: string,
   ref: string,
   inputs: Record<string, string>,
 ): Promise<boolean> {
   try {
-    await octokit.rest.actions.createWorkflowDispatch({
+    await client.createWorkflowDispatch({
       owner: ctx.owner,
       repo: ctx.repo,
-      workflow_id: workflowFile,
+      workflowFile,
       ref,
       inputs,
     });
@@ -204,12 +199,12 @@ async function dispatchWorkflow(
 // ============================================================================
 
 async function buildPRContext(
-  octokit: OctokitType,
+  client: GitHubClient,
   owner: string,
   repo: string,
   prNumber: number,
 ): Promise<PRContext> {
-  const pr = await getPR(octokit, { owner, repo, prNumber });
+  const pr = await getPR(client, { owner, repo, prNumber });
   return {
     owner,
     repo,
@@ -226,19 +221,19 @@ const CONFIG_PATH = '.release-toolkit/config.json';
 
 /** 从仓库默认分支或指定 ref 读取 config.json */
 async function fetchRepoToolkitConfig(
-  octokit: OctokitType,
+  client: GitHubClient,
   owner: string,
   repo: string,
   ref: string,
 ): Promise<Record<string, unknown> | null> {
   try {
-    const { data } = await octokit.rest.repos.getContent({
+    const data = await client.getRepoContent({
       owner,
       repo,
       path: CONFIG_PATH,
       ref,
     });
-    if (Array.isArray(data) || data.type !== 'file' || !('content' in data)) return null;
+    if (!data?.content) return null;
     const decoded = atob(data.content.replace(/\n/g, ''));
     return JSON.parse(decoded) as Record<string, unknown>;
   } catch {
@@ -253,13 +248,13 @@ async function fetchRepoToolkitConfig(
  * 3. 最后使用默认值
  */
 async function resolveOutputSectionsForPR(
-  octokit: OctokitType,
+  client: GitHubClient,
   prCtx: PRContext,
   env: Env,
 ): Promise<OutputSections> {
   const ref = prCtx.headSha || prCtx.headRef;
   if (ref) {
-    const config = await fetchRepoToolkitConfig(octokit, prCtx.owner, prCtx.repo, ref);
+    const config = await fetchRepoToolkitConfig(client, prCtx.owner, prCtx.repo, ref);
     const fromRepo = outputSectionsFromRepoConfig(config);
     if (fromRepo) return fromRepo;
   }
@@ -267,7 +262,7 @@ async function resolveOutputSectionsForPR(
 }
 
 async function runCollect(
-  octokit: OctokitType,
+  client: GitHubClient,
   prCtx: PRContext,
   sections: OutputSections,
   approved = false,
@@ -275,14 +270,18 @@ async function runCollect(
   try {
     const ref = prCtx.headSha || prCtx.headRef;
     const repoConfig = ref
-      ? await fetchRepoToolkitConfig(octokit, prCtx.owner, prCtx.repo, ref)
+      ? await fetchRepoToolkitConfig(client, prCtx.owner, prCtx.repo, ref)
       : null;
     const { changedPackages, versionDiffs } = await resolvePRVersionState(
-      octokit,
+      client,
       prCtx,
       repoConfig,
     );
-    const { packageChangeLogs } = extractReleaseLog(prCtx.prBody);
+    const { packageChangeLogs } = await resolveReleaseLogForPR(
+      client,
+      prCtx,
+      repoConfig,
+    );
     const commentBody = buildPRComment({
       prCtx,
       changedPackages,
@@ -291,7 +290,7 @@ async function runCollect(
       sections,
       approved,
     });
-    await upsertPRComment(octokit, prCtx, commentBody);
+    await upsertPRComment(client, prCtx, commentBody);
     return { ok: true, commentBody };
   } catch (err) {
     console.error('[runCollect] failed:', err);
@@ -300,27 +299,31 @@ async function runCollect(
 }
 
 async function runConfirmAndWriteToBody(
-  octokit: OctokitType,
+  client: GitHubClient,
   prCtx: PRContext,
   sections: OutputSections,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     const ref = prCtx.headSha || prCtx.headRef;
     const repoConfig = ref
-      ? await fetchRepoToolkitConfig(octokit, prCtx.owner, prCtx.repo, ref)
+      ? await fetchRepoToolkitConfig(client, prCtx.owner, prCtx.repo, ref)
       : null;
     const { changedPackages, versionDiffs } = await resolvePRVersionState(
-      octokit,
+      client,
       prCtx,
       repoConfig,
     );
-    const { packageChangeLogs } = extractReleaseLog(prCtx.prBody);
+    const { packageChangeLogs } = await resolveReleaseLogForPR(
+      client,
+      prCtx,
+      repoConfig,
+    );
     const confirmedLog = buildConfirmedReleaseLog(prCtx, changedPackages, versionDiffs, packageChangeLogs);
     const newBody = upsertOutputInBody(prCtx.prBody, confirmedLog);
     if (newBody === prCtx.prBody) return { ok: true };
-    await updatePRBody(octokit, prCtx, newBody);
+    await updatePRBody(client, prCtx, newBody);
     // 同时把通知评论刷新为「已批准」
-    await runCollect(octokit, { ...prCtx, prBody: newBody }, sections, true);
+    await runCollect(client, { ...prCtx, prBody: newBody }, sections, true);
     return { ok: true };
   } catch (err) {
     console.error('[runConfirmAndWriteToBody] failed:', err);
@@ -329,12 +332,12 @@ async function runConfirmAndWriteToBody(
 }
 
 async function runTriggerRelease(
-  octokit: OctokitType,
+  client: GitHubClient,
   prCtx: PRContext,
   workflowFile: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const dispatched = await dispatchWorkflow(
-    octokit,
+    client,
     { owner: prCtx.owner, repo: prCtx.repo },
     workflowFile,
     prCtx.baseRef,
@@ -365,7 +368,7 @@ function expectedBaseBranch(env: Env): string {
 
 async function handlePullRequest(
   payload: PullRequestPayload,
-  octokit: OctokitType,
+  client: GitHubClient,
   env: Env,
 ): Promise<Response> {
   const action = payload.action;
@@ -388,12 +391,12 @@ async function handlePullRequest(
     return jsonResponse({ success: false, error: 'missing repo in payload' }, 400);
   }
 
-  const prCtx = await buildPRContext(octokit, owner, repo, pr.number);
+  const prCtx = await buildPRContext(client, owner, repo, pr.number);
 
   // 合并 + base 命中 → 触发发布 workflow
   if (action === 'closed' && pr.merged) {
     const workflowFile = env.RELEASE_PUBLISH_WORKFLOW || DEFAULT_PUBLISH_WORKFLOW;
-    const result = await runTriggerRelease(octokit, prCtx, workflowFile);
+    const result = await runTriggerRelease(client, prCtx, workflowFile);
     return jsonResponse({
       success: result.ok,
       action: 'releasePublisher',
@@ -415,8 +418,8 @@ async function handlePullRequest(
     action === 'edited' ||
     action === 'ready_for_review'
   ) {
-    const sections = await resolveOutputSectionsForPR(octokit, prCtx, env);
-    const result = await runCollect(octokit, prCtx, sections);
+    const sections = await resolveOutputSectionsForPR(client, prCtx, env);
+    const result = await runCollect(client, prCtx, sections);
     return jsonResponse({ success: result.ok, action: 'prLogCollector', error: result.error });
   }
 
@@ -432,7 +435,7 @@ async function handlePullRequest(
  */
 async function handleRepositoryDispatch(
   payload: RepositoryDispatchPayload,
-  octokit: OctokitType,
+  client: GitHubClient,
   env: Env,
 ): Promise<Response> {
   const eventType = payload.event_type ?? '';
@@ -475,7 +478,7 @@ async function handleRepositoryDispatch(
   if (inferredAction === 'publish') {
     const workflowFile = env.RELEASE_PUBLISH_WORKFLOW || DEFAULT_PUBLISH_WORKFLOW;
     const dispatched = await dispatchWorkflow(
-      octokit,
+      client,
       { owner, repo },
       workflowFile,
       expectedBaseBranch(env),
@@ -491,7 +494,7 @@ async function handleRepositoryDispatch(
     });
   }
 
-  const prCtx = await buildPRContext(octokit, owner, repo, prNumber!);
+  const prCtx = await buildPRContext(client, owner, repo, prNumber!);
   const expected = expectedBaseBranch(env);
   if (prCtx.baseRef !== expected) {
     return jsonResponse({
@@ -501,15 +504,15 @@ async function handleRepositoryDispatch(
     });
   }
 
-  const sections = await resolveOutputSectionsForPR(octokit, prCtx, env);
+  const sections = await resolveOutputSectionsForPR(client, prCtx, env);
 
   if (inferredAction === 'collect') {
-    const result = await runCollect(octokit, prCtx, sections);
+    const result = await runCollect(client, prCtx, sections);
     return jsonResponse({ success: result.ok, action: 'prLogCollector', error: result.error });
   }
 
   if (inferredAction === 'write') {
-    const result = await runConfirmAndWriteToBody(octokit, prCtx, sections);
+    const result = await runConfirmAndWriteToBody(client, prCtx, sections);
     return jsonResponse({ success: result.ok, action: 'logWrite', error: result.error });
   }
 
@@ -518,7 +521,7 @@ async function handleRepositoryDispatch(
 
 async function handlePullRequestReview(
   payload: PullRequestPayload,
-  octokit: OctokitType,
+  client: GitHubClient,
   env: Env,
 ): Promise<Response> {
   const pr = payload.pull_request;
@@ -539,9 +542,9 @@ async function handlePullRequestReview(
   if (!owner || !repo) {
     return jsonResponse({ success: false, error: 'missing repo in payload' }, 400);
   }
-  const prCtx = await buildPRContext(octokit, owner, repo, pr.number);
-  const sections = await resolveOutputSectionsForPR(octokit, prCtx, env);
-  const result = await runConfirmAndWriteToBody(octokit, prCtx, sections);
+  const prCtx = await buildPRContext(client, owner, repo, pr.number);
+  const sections = await resolveOutputSectionsForPR(client, prCtx, env);
+  const result = await runConfirmAndWriteToBody(client, prCtx, sections);
   return jsonResponse({ success: result.ok, action: 'logWrite', error: result.error });
 }
 
@@ -575,23 +578,16 @@ async function verifySignature(
   }
 }
 
-async function acquireOctokit(
+async function acquireGitHubClient(
   env: Env,
   payload: { installation?: { id?: number } },
-): Promise<OctokitType | null> {
-  if (env.GITHUB_APP_ID && env.GITHUB_APP_PRIVATE_KEY && payload.installation?.id) {
-    try {
-      const app = new App({
-        appId: Number(env.GITHUB_APP_ID),
-        privateKey: env.GITHUB_APP_PRIVATE_KEY,
-      });
-      return await app.getInstallationOctokit(payload.installation.id);
-    } catch (err) {
-      console.error('[acquireOctokit] failed:', err);
-      return null;
-    }
+): Promise<GitHubClient | null> {
+  try {
+    return await createGitHubClient(env, payload.installation?.id);
+  } catch (err) {
+    console.error('[acquireGitHubClient] failed:', err);
+    return null;
   }
-  return new Octokit();
 }
 
 export default {
@@ -618,19 +614,19 @@ export default {
       return jsonResponse({ success: false, error: 'Invalid JSON' }, 400);
     }
 
-    const octokit = await acquireOctokit(env, payload);
-    if (!octokit) {
+    const client = await acquireGitHubClient(env, payload);
+    if (!client) {
       return jsonResponse({ success: false, error: 'Unable to authenticate' }, 401);
     }
 
     try {
       switch (eventType) {
         case 'pull_request':
-          return await handlePullRequest(payload, octokit, env);
+          return await handlePullRequest(payload, client, env);
         case 'pull_request_review':
-          return await handlePullRequestReview(payload, octokit, env);
+          return await handlePullRequestReview(payload, client, env);
         case 'repository_dispatch':
-          return await handleRepositoryDispatch(payload, octokit, env);
+          return await handleRepositoryDispatch(payload, client, env);
         case 'ping':
           return jsonResponse({ success: true, status: 'pong' });
         default:

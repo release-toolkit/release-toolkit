@@ -188,7 +188,7 @@ export function buildEditGuide(): string {
   return `<details>
 <summary>✏️ 如何修改变更日志</summary>
 
-在 **PR 描述体** 中追加以下标记区（替换为你的真实内容）：
+在 **PR 评论**（推荐：首条含标记区的评论）或 **PR 描述体** 中使用以下格式：
 
 \`\`\`
 ${RELEASE_LOG_START}
@@ -199,8 +199,10 @@ ${RELEASE_LOG_START}
 
 ## package-b
 - 此处可省略标题，工具会自动使用 PR 标题
+${RELEASE_LOG_END}
 \`\`\`
 
+> 默认从评论读取（\`logExtraction.source: comment\`）；若只在描述体中编辑，请在 \`.release-toolkit/config.json\` 改为 \`pr-body\`。
 > 若无 \`## 包名\` 分组，工具会把列表视为所有变更包的通用日志。
 </details>`;
 }

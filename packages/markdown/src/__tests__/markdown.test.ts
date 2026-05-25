@@ -14,6 +14,11 @@ import {
   upsertOutputInBody,
   RELEASE_LOG_START,
   RELEASE_LOG_END,
+  isToolCommentBody,
+  wrapToolComment,
+  COMMENT_ANCHOR_START,
+  COMMENT_ANCHOR_END,
+  LEGACY_COMMENT_ANCHOR_STARTS,
 } from '../index.js';
 
 describe('applyEmojiPrefixToLine', () => {
@@ -99,5 +104,19 @@ describe('extractReleaseLogFromBody', () => {
     const { rawReleaseLog, packageChangeLogs } = extractReleaseLogFromBody(body);
     expect(rawReleaseLog).toContain('## a');
     expect(packageChangeLogs[0].packages).toEqual(['a']);
+  });
+});
+
+describe('isToolCommentBody / wrapToolComment', () => {
+  it('应识别当前与历史工具评论锚点', () => {
+    expect(isToolCommentBody('<!-- release-toolkit-comment-start -->')).toBe(true);
+    expect(isToolCommentBody(LEGACY_COMMENT_ANCHOR_STARTS[0])).toBe(true);
+    expect(isToolCommentBody('普通评论')).toBe(false);
+  });
+
+  it('wrapToolComment 使用标准锚点', () => {
+    expect(wrapToolComment('正文')).toBe(
+      `${COMMENT_ANCHOR_START}\n正文\n${COMMENT_ANCHOR_END}`,
+    );
   });
 });

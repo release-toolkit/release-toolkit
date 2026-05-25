@@ -6,7 +6,11 @@ export {
   OUTPUT_MARKERS,
   COMMENT_ANCHOR_START,
   COMMENT_ANCHOR_END,
+  LEGACY_COMMENT_ANCHOR_STARTS,
   DEFAULT_RELEASE_LOG_MARKERS,
+  isToolCommentBody,
+  bodyHasReleaseLogMarkers,
+  wrapToolComment,
   type ReleaseLogMarkers,
 } from './markers.js';
 

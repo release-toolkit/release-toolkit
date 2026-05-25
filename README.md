@@ -120,10 +120,10 @@ graph LR
     CLI["@release-toolkit/cli"] --> Core["@release-toolkit/core"]
     Core --> Types["@release-toolkit/types"]
     Core --> Markdown["@release-toolkit/markdown"]
-    AppServer --> Markdown
-    Presets --> Types
+    AppServer["@release-toolkit/app-server"] --> Markdown
+    Presets["@release-toolkit/changelog-presets"] --> Types
     Presets --> Markdown
-    AppServer["@release-toolkit/app-server"] -.->|独立| Env[Cloudflare Workers]
+    AppServer -.->|独立| Env[Cloudflare Workers]
 ```
 
 CLI 支持 `--config-path` 指定配置文件（默认 `.release-toolkit/config.json`）。

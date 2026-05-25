@@ -65,12 +65,12 @@ flowchart TB
 
 | 包名 | 职责 | 入口文件 |
 |------|------|----------|
-| `@release-toolkit/types` | 共享 TypeScript 类型定义 | `src/index.ts` |
-| `@release-toolkit/markdown` | 列表 / RELEASE-LOG / OUTPUT 区纯函数 | `src/index.ts` |
-| `@release-toolkit/core` | 版本检测、changelog、插件、发布执行 | `src/index.ts` |
-| `@release-toolkit/cli` | 命令行界面 | `src/index.ts` |
-| `@release-toolkit/changelog-presets` | 预设格式化器 | `src/index.ts` |
-| `@release-toolkit/app-server` | GitHub App Webhook（Worker） | `src/index.ts` |
+| `@release-toolkit/types` | 共享 TypeScript 类型定义（零运行时依赖） | `dist/index.mjs` |
+| `@release-toolkit/markdown` | Markdown 工具函数（列表、RELEASE-LOG 解析、emoji 前缀） | `dist/index.mjs` |
+| `@release-toolkit/core` | 版本检测、changelog 引擎、插件系统、CI 层 | `dist/index.mjs` |
+| `@release-toolkit/cli` | 命令行界面 | `dist/index.mjs` |
+| `@release-toolkit/changelog-presets` | 预设格式化器 | `dist/index.mjs` |
+| `@release-toolkit/app-server` | GitHub App Webhook（Cloudflare Worker） | `dist/index.mjs` |
 
 ## 核心功能
 

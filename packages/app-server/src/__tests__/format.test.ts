@@ -305,10 +305,12 @@ describe('wrapOutputMarkers / buildEditGuide / buildConfirmedReleaseLog', () => 
     expect(wrapOutputMarkers('X')).toBe(`${OUTPUT_START}\nX\n${OUTPUT_END}`);
   });
 
-  it('buildEditGuide 含 `<details>` 折叠块', () => {
+  it('buildEditGuide 含 `<details>` 折叠块与评论说明', () => {
     const guide = buildEditGuide();
     expect(guide).toContain('<details>');
     expect(guide).toContain(RELEASE_LOG_START);
+    expect(guide).toContain(RELEASE_LOG_END);
+    expect(guide).toContain('PR 评论');
   });
 
   it('buildConfirmedReleaseLog 含已确认横幅与预览', () => {

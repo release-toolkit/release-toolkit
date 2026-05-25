@@ -4,9 +4,8 @@ export const DEFAULT_BASE_REF = 'main';
 /** Default directory for accumulated changelog JSON files */
 export const DEFAULT_CHANGELOG_DIR = '.changelog';
 
-/** Anchor markers for PR comment updates */
-export const COMMENT_ANCHOR_START = '<!-- release-tool-report-start -->';
-export const COMMENT_ANCHOR_END = '<!-- release-tool-report-end -->';
+/** PR 评论 upsert 锚点（与 @release-toolkit/markdown 同源） */
+export { COMMENT_ANCHOR_START, COMMENT_ANCHOR_END } from '@release-toolkit/markdown';
 
 /** Default plugins enabled in CI mode */
 export const DEFAULT_PLUGINS = ['emoji-prefix', 'category-group', 'markdown-bold'] as const;

@@ -1,7 +1,7 @@
 import { createOctokit } from './github/api-client.js';
 import type { OctokitInstance } from './github/types.js';
 import type { PackageVersionInfo, VersionDiffResult } from './types.js';
-import { compareVersions } from './version.js';
+import { compareVersions } from './version-compare.js';
 
 export interface RepoVersionContext {
   owner: string;

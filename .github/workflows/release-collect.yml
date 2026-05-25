@@ -1,8 +1,7 @@
 name: release-collect
 
-# 可选的 CI 兜底：若不使用 @release-toolkit/app-server (Cloudflare Worker)，
-# 可改用本 workflow 在 PR 上调用 `release collect`，把日志写入 PR 描述体。
-# 工作流会读取 `.release-toolkit/config.json` 的 `branches.base`。
+# CI 兜底：未部署 App Server 时使用。若已部署 Worker，请在仓库 Settings →
+# Variables 设置 RELEASE_TOOLKIT_APP_SERVER=true，避免与 Worker 重复处理 PR。
 on:
   pull_request:
     types: [opened, reopened, synchronize, edited]
@@ -14,8 +13,9 @@ permissions:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    # 仅在 PR 的 base 分支匹配时执行（按需调整）
-    if: github.event.pull_request.base.ref == 'dev'
+    if: >-
+      github.event.pull_request.base.ref == 'dev' &&
+      vars.RELEASE_TOOLKIT_APP_SERVER != 'true'
     steps:
       - uses: actions/checkout@v4
         with:
