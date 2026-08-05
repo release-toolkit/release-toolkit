@@ -1,5 +1,7 @@
 # 共享 Markdown 模块详解 (@release-toolkit/markdown)
 
+> 本文主体描述当前 RELEASE-LOG/OUTPUT 工具。目标 Markdown 包还必须实现 Release PR 一级 package checkbox 与日志 override 的严格标记协议，详见 [实施规格 P5](../implementation/README.md#p5-markdown-selection-与评论)。
+
 ## 职责定位
 
 `@release-toolkit/markdown` 是 **零运行时环境依赖** 的纯字符串工具包（无 `fs`、无 `git`、无 `octokit`），用于统一：
@@ -39,15 +41,15 @@ flowchart TB
   style Markdown fill:#e8f4fc
 ```
 
-| 调用方 | 使用的 API | 说明 |
-|--------|------------|------|
-| **core** `package-log-format.ts` | `formatTitleBulletLine`、`formatChangeLogBulletsFromBody` | 在 markdown 基础上叠加 changelog **插件** `formatLine` |
-| **core** `release-log-extractor.ts` | `extractReleaseLogFromBody`、`parseReleaseLog` | 支持自定义 `releaseLogMarker` |
-| **core** `collector.ts` | `upsertOutputInBody` | 写入 PR 描述体（含说明引用块） |
-| **core** `previewer.ts` | `OUTPUT_MARKERS`、`escapeRegex` | 从已合并 PR body 提取 OUTPUT 区 |
-| **app-server** `format.ts` | `formatTitleBulletWithEmoji`、`formatChangeLogBulletsPlain`、评论组装 | Worker 无插件，走内置 emoji |
-| **app-server** `format.ts` | `upsertOutputInBody` | Approve 后写入 PR 描述体 |
-| **changelog-presets** | `COMMIT_TYPE_EMOJI`（再导出） | 与 `applyEmojiPrefixToLine` 同源 |
+| 调用方                              | 使用的 API                                                            | 说明                                                   |
+| ----------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------ |
+| **core** `package-log-format.ts`    | `formatTitleBulletLine`、`formatChangeLogBulletsFromBody`             | 在 markdown 基础上叠加 changelog **插件** `formatLine` |
+| **core** `release-log-extractor.ts` | `extractReleaseLogFromBody`、`parseReleaseLog`                        | 支持自定义 `releaseLogMarker`                          |
+| **core** `collector.ts`             | `upsertOutputInBody`                                                  | 写入 PR 描述体（含说明引用块）                         |
+| **core** `previewer.ts`             | `OUTPUT_MARKERS`、`escapeRegex`                                       | 从已合并 PR body 提取 OUTPUT 区                        |
+| **app-server** `format.ts`          | `formatTitleBulletWithEmoji`、`formatChangeLogBulletsPlain`、评论组装 | Worker 无插件，走内置 emoji                            |
+| **app-server** `format.ts`          | `upsertOutputInBody`                                                  | Approve 后写入 PR 描述体                               |
+| **changelog-presets**               | `COMMIT_TYPE_EMOJI`（再导出）                                         | 与 `applyEmojiPrefixToLine` 同源                       |
 
 > **core** 仍通过 `shared/utils.ts` **再导出** markdown 的部分符号（`OUTPUT_MARKERS`、`escapeRegex` 等），旧代码可继续 `import { OUTPUT_MARKERS } from '@release-toolkit/core'`。
 
@@ -73,12 +75,12 @@ packages/markdown/src/
 
 ## 标记常量
 
-| 常量 | 用途 | 读写方 |
-|------|------|--------|
-| `RELEASE_LOG_START` / `RELEASE_LOG_END` | 用户在 PR 描述体中编辑的变更日志区 | 用户写、collect 读 |
-| `OUTPUT_START` / `OUTPUT_END` | 工具写入 PR 描述体的结构化输出 | collect / App Server 写 |
-| `OUTPUT_MARKERS` | `{ START, END }` 对象，兼容 core 历史 API | preview 聚合已合并 PR |
-| `COMMENT_ANCHOR_START` / `END` | PR 评论 upsert 锚点 | App Server |
+| 常量                                    | 用途                                      | 读写方                  |
+| --------------------------------------- | ----------------------------------------- | ----------------------- |
+| `RELEASE_LOG_START` / `RELEASE_LOG_END` | 用户在 PR 描述体中编辑的变更日志区        | 用户写、collect 读      |
+| `OUTPUT_START` / `OUTPUT_END`           | 工具写入 PR 描述体的结构化输出            | collect / App Server 写 |
+| `OUTPUT_MARKERS`                        | `{ START, END }` 对象，兼容 core 历史 API | preview 聚合已合并 PR   |
+| `COMMENT_ANCHOR_START` / `END`          | PR 评论 upsert 锚点                       | App Server              |
 
 ---
 
@@ -121,23 +123,23 @@ extractReleaseLogFromBody(body, { start: '<!-- CUSTOM-START -->', end: '...' });
 
 ```typescript
 // 包裹
-wrapOutputMarkers(inner)  // <!-- RELEASE-TOOLKIT-OUTPUT-START --> ...
+wrapOutputMarkers(inner); // <!-- RELEASE-TOOLKIT-OUTPUT-START --> ...
 
 // 幂等更新（无标记区 → 追加；有 → 替换）
 upsertOutputInBody(currentBody, innerContent);
-upsertOutputInBody(body, inner, { replaceAll: true });  // core collector 全局替换
+upsertOutputInBody(body, inner, { replaceAll: true }); // core collector 全局替换
 ```
 
 ---
 
 ## Core vs App Server 渲染差异
 
-| 能力 | Core（CI / `collectPRLog`） | App Server（Worker 评论） |
-|------|---------------------------|---------------------------|
-| 标题 emoji | 依赖 `plugins`（如 `emoji-prefix`） | 内置 `applyEmojiPrefixToLine` |
-| 变更日志格式化 | `parseChangelog` + `applyFormatters` | `formatChangeLogBulletsPlain` |
-| PR 描述体更新 | `upsertOutputInBody` + 说明引用块 | `upsertOutputInBody`（无额外说明块） |
-| 评论结构 | — | `buildPRComment`（通知 / 预览 / 指南） |
+| 能力           | Core（CI / `collectPRLog`）          | App Server（Worker 评论）              |
+| -------------- | ------------------------------------ | -------------------------------------- |
+| 标题 emoji     | 依赖 `plugins`（如 `emoji-prefix`）  | 内置 `applyEmojiPrefixToLine`          |
+| 变更日志格式化 | `parseChangelog` + `applyFormatters` | `formatChangeLogBulletsPlain`          |
+| PR 描述体更新  | `upsertOutputInBody` + 说明引用块    | `upsertOutputInBody`（无额外说明块）   |
+| 评论结构       | —                                    | `buildPRComment`（通知 / 预览 / 指南） |
 
 两者输出的 **bullet 结构与 `## 包名` 分组语义一致**，差异仅在是否加载 changelog 插件。
 
@@ -164,14 +166,29 @@ pnpm --filter @release-toolkit/markdown build
 
 ## 扩展指南
 
-| 需求 | 建议 |
-|------|------|
-| 新增 commit type emoji | 改 `src/emoji.ts` 的 `COMMIT_TYPE_EMOJI`，changelog-presets 自动同源 |
-| 新增 RELEASE-LOG 格式 | 优先扩展 `parse-release-log.ts` 并补 vitest |
-| 评论 / 描述体新锚点 | 在 `markers.ts` 增加常量，勿在 core/app-server 硬编码 |
-| 复杂 changelog 变换 | 放在 **core 插件** 或 `formatChangeLogBulletsFromBody` 的 `transformBody`，不要塞进 Worker |
+| 需求                   | 建议                                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------------------ |
+| 新增 commit type emoji | 改 `src/emoji.ts` 的 `COMMIT_TYPE_EMOJI`，changelog-presets 自动同源                       |
+| 新增 RELEASE-LOG 格式  | 优先扩展 `parse-release-log.ts` 并补 vitest                                                |
+| 评论 / 描述体新锚点    | 在 `markers.ts` 增加常量，勿在 core/app-server 硬编码                                      |
+| 复杂 changelog 变换    | 放在 **core 插件** 或 `formatChangeLogBulletsFromBody` 的 `transformBody`，不要塞进 Worker |
 
 ---
+
+## 目标标记协议
+
+目标流程保留现有 Marker 作为 legacy adapter，同时新增：
+
+| 标记                          | 用途                                              |
+| ----------------------------- | ------------------------------------------------- |
+| 工具评论 anchor               | 限定唯一可解析评论                                |
+| `selection:start/end`         | 限定 package checkbox 区，并携带 plan ID/revision |
+| `release-toolkit:package key` | 一级 checkbox 的稳定 package 主键                 |
+| `log:start/end key`           | package 日志展示和二次修改区                      |
+
+解析器必须是纯函数并严格失败：只接受当前 plan/revision 的已知 key；普通 checkbox、重复 key、嵌套伪造、缺失边界和过期 revision 不得被容错成有效 selection。渲染和解析必须有 round-trip 测试。
+
+Markdown 包只负责字符串协议，不访问 GitHub、不校验用户权限、不写 Release Plan；权限和持久化分别属于 App Server 与 Core。
 
 ## 相关文档
 

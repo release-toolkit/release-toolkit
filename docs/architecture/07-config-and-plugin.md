@@ -1,18 +1,20 @@
 # 配置系统与插件系统详解
 
+> 本文区分当前已实现的配置与插件能力，以及后续目标架构。配置应描述长期规则，某一次发布的 package 选择和目标版本应记录在 Release Plan 中，而不是永久写入全局配置。完整边界见 [09-release-plan-architecture.md](./09-release-plan-architecture.md)，字段实现和迁移按 [实施规格第 7 节](../implementation/README.md#7-配置目标) 执行。
+
 ## 实现状态总览
 
-| 模块 | 状态 | 说明 |
-|------|------|------|
-| 配置加载 (`loadConfig`) | ✅ 已实现 | 从 `.release-toolkit/config.json` 加载配置 |
-| `ReleaseToolkitConfig` 类型 | ✅ 已实现 | 配置类型定义 |
-| `DEFAULT_CONFIG` | ✅ 已实现 | 默认配置常量 |
-| 配置继承 | 🔲 规划中 | 多配置文件继承机制 |
-| `ChangelogFormatter` | ✅ 已实现 | 日志格式化器接口 |
-| `loadPlugins` / `applyFormatters` | ✅ 已实现 | 插件加载和应用 |
-| `IPlugin` 通用插件接口 | ⚠️ 类型已就位 | `loadPluginsAsIPlugin` + `HookRunner` 已接通；内置 preset 未实现生命周期钩子 |
-| `ILogParser` 自定义日志解析 | ⚠️ 类型已就位 | `loadLogParser` 可加载；默认解析仍走 `parseChangelog` |
-| `ILineFormatter` / `ILogFormatter` | ⚠️ 类型已就位 | 已在 `shared/types.ts` 定义，loader 兼容 |
+| 模块                               | 状态          | 说明                                                                         |
+| ---------------------------------- | ------------- | ---------------------------------------------------------------------------- |
+| 配置加载 (`loadConfig`)            | ✅ 已实现     | 从 `.release-toolkit/config.json` 加载配置                                   |
+| `ReleaseToolkitConfig` 类型        | ✅ 已实现     | 配置类型定义                                                                 |
+| `DEFAULT_CONFIG`                   | ✅ 已实现     | 默认配置常量                                                                 |
+| 配置继承                           | 🔲 规划中     | 多配置文件继承机制                                                           |
+| `ChangelogFormatter`               | ✅ 已实现     | 日志格式化器接口                                                             |
+| `loadPlugins` / `applyFormatters`  | ✅ 已实现     | 插件加载和应用                                                               |
+| `IPlugin` 通用插件接口             | ⚠️ 类型已就位 | `loadPluginsAsIPlugin` + `HookRunner` 已接通；内置 preset 未实现生命周期钩子 |
+| `ILogParser` 自定义日志解析        | ⚠️ 类型已就位 | `loadLogParser` 可加载；默认解析仍走 `parseChangelog`                        |
+| `ILineFormatter` / `ILogFormatter` | ⚠️ 类型已就位 | 已在 `shared/types.ts` 定义，loader 兼容                                     |
 
 ---
 
@@ -24,23 +26,52 @@
 
 ## 支持的配置项
 
-| 配置项 | 默认值 | 状态 | 说明 |
-|--------|--------|------|------|
-| `branches.base` | `"dev"` | ✅ | 目标分支（PR 日志收集、版本预览与发布共用） |
-| `prLogCollector.releaseLogMarker` | `<!-- RELEASE-LOG-START/END -->` | ✅ | PR 日志标记 |
-| `prLogCollector.outputSections` | 全部启用 | ✅ | App Server 优先读仓库 `.release-toolkit/config.json`；`OUTPUT_SECTIONS` env 为回退 |
-| `prLogCollector.logExtraction` | `source: "comment"` | ✅ | `comment` 从 PR 评论读取标记区；`pr-body` 仅读描述体；找不到时回退 body |
-| `releasePreview.workspaceFile` | `"pnpm-workspace.yaml"` | ✅ | Monorepo 配置文件；Worker/API 模式从 GitHub 读取该文件解析 `packages` |
-| `releasePreview.noChangeMessage` | 内置中文提示 | ✅ | 无版本变更时的提示 |
-| `releasePreview.previewOutput` | 全部 `true` | ✅ | 控制预览评论中版本表 / 包列表 / changelog 显隐 |
-| `releasePublisher.createGithubRelease` | `true` | ✅ | 是否创建 GitHub Release |
-| `releasePublisher.gitTags` | `{packageName}@{version}` | ✅ | Tag 名与 annotated message 模板，支持 `{packageName}`、`{version}` |
-| `releasePublisher.beforeTag` | `[]` | ✅ | 创建 Tag 前的钩子；失败写入 `errors` 并 `console.warn` |
-| `releasePublisher.afterRelease` | `[]` | ✅ | 发布后钩子；失败汇总到 `publishRelease().errors` |
-| `releasePublisher.afterRelease.type=webhook/slack/discord` | - | ✅ | 扁平 `type` 或 `LifecycleHook`（`run` + `webhook` / `notify`）均可 |
-| `plugins` | 默认插件列表 | ✅ | 自定义格式化器插件 |
+| 配置项                                                     | 默认值                           | 状态 | 说明                                                                               |
+| ---------------------------------------------------------- | -------------------------------- | ---- | ---------------------------------------------------------------------------------- |
+| `branches.base`                                            | `"dev"`                          | ✅   | 目标分支（PR 日志收集、版本预览与发布共用）                                        |
+| `prLogCollector.releaseLogMarker`                          | `<!-- RELEASE-LOG-START/END -->` | ✅   | PR 日志标记                                                                        |
+| `prLogCollector.outputSections`                            | 全部启用                         | ✅   | App Server 优先读仓库 `.release-toolkit/config.json`；`OUTPUT_SECTIONS` env 为回退 |
+| `prLogCollector.logExtraction`                             | `source: "comment"`              | ✅   | `comment` 从 PR 评论读取标记区；`pr-body` 仅读描述体；找不到时回退 body            |
+| `releasePreview.workspaceFile`                             | `"pnpm-workspace.yaml"`          | ✅   | Monorepo 配置文件；Worker/API 模式从 GitHub 读取该文件解析 `packages`              |
+| `releasePreview.noChangeMessage`                           | 内置中文提示                     | ✅   | 无版本变更时的提示                                                                 |
+| `releasePreview.previewOutput`                             | 全部 `true`                      | ✅   | 控制预览评论中版本表 / 包列表 / changelog 显隐                                     |
+| `releasePublisher.createGithubRelease`                     | `true`                           | ✅   | 是否创建 GitHub Release                                                            |
+| `releasePublisher.gitTags`                                 | `{packageName}@{version}`        | ✅   | Tag 名与 annotated message 模板，支持 `{packageName}`、`{version}`                 |
+| `releasePublisher.beforeTag`                               | `[]`                             | ✅   | 创建 Tag 前的钩子；失败写入 `errors` 并 `console.warn`                             |
+| `releasePublisher.afterRelease`                            | `[]`                             | ✅   | 发布后钩子；失败汇总到 `publishRelease().errors`                                   |
+| `releasePublisher.afterRelease.type=webhook/slack/discord` | -                                | ✅   | 扁平 `type` 或 `LifecycleHook`（`run` + `webhook` / `notify`）均可                 |
+| `plugins`                                                  | 默认插件列表                     | ✅   | 自定义格式化器插件                                                                 |
 
 > ✅ = 已实现 ｜ ⚠️ = 部分实现/有约束 ｜ 🔲 = 文档定义，待实现
+
+## 目标扩展方向
+
+后续配置建议按以下职责组织：
+
+```mermaid
+flowchart TB
+    Config[仓库配置]
+    Config --> Log[log：日志来源与解析]
+    Config --> Packages[packages：默认发布策略]
+    Config --> Workspace[workspace：依赖联动]
+    Config --> Versioning[versioning：版本计算]
+    Config --> Formatting[formatting：输出策略]
+    Config --> Publishing[publishing：Tag / Registry / Release]
+    Config --> Plugins[plugins：扩展点]
+
+    Plan[Release Plan] -->|保存本次实际选择| Packages
+    Plan -->|保存本次实际版本| Versioning
+```
+
+插件建议分为三类：
+
+| 插件类型          | 责任                       | 不负责            |
+| ----------------- | -------------------------- | ----------------- |
+| Log Parser        | 将原始来源解析为结构化日志 | 决定发布范围      |
+| Entry Formatter   | 格式化单条日志             | 修改 package 版本 |
+| Release Formatter | 格式化整个发布计划         | 执行发布动作      |
+
+现有 `ChangelogFormatter` 和 `IPlugin` 可以作为兼容层逐步演进；不建议让一个插件同时承担日志解析、版本计算和发布执行。
 
 ---
 
@@ -102,11 +133,7 @@
     ]
   },
 
-  "plugins": [
-    "emoji-prefix",
-    "category-group",
-    "markdown-bold"
-  ]
+  "plugins": ["emoji-prefix", "category-group", "markdown-bold"]
 }
 ```
 
@@ -142,14 +169,14 @@ release publish --config-path ./my-config.json
 
 **扁平格式（`AfterReleaseHook`）**
 
-| 类型 | 说明 | 配置 |
-|------|------|------|
-| `command` / `npm-publish` / `custom` | Shell 命令 | `command` |
-| `script` | 项目脚本 | `script` |
-| `package` | npm 包入口 | `name`, `args` |
-| `webhook` | HTTP 请求 | `url`, `method`, `headers`, `body`（支持 `{{tagName}}` 等占位符） |
-| `slack` | Slack Incoming Webhook | `webhookUrl` 或 env `SLACK_WEBHOOK_URL`，`channel`, `message` |
-| `discord` | Discord Webhook | `webhookUrl`, `discordMessage` 或 `message` |
+| 类型                                 | 说明                   | 配置                                                              |
+| ------------------------------------ | ---------------------- | ----------------------------------------------------------------- |
+| `command` / `npm-publish` / `custom` | Shell 命令             | `command`                                                         |
+| `script`                             | 项目脚本               | `script`                                                          |
+| `package`                            | npm 包入口             | `name`, `args`                                                    |
+| `webhook`                            | HTTP 请求              | `url`, `method`, `headers`, `body`（支持 `{{tagName}}` 等占位符） |
+| `slack`                              | Slack Incoming Webhook | `webhookUrl` 或 env `SLACK_WEBHOOK_URL`，`channel`, `message`     |
+| `discord`                            | Discord Webhook        | `webhookUrl`, `discordMessage` 或 `message`                       |
 
 **LifecycleHook 格式（一次配置多步执行）**
 
@@ -157,7 +184,11 @@ release publish --config-path ./my-config.json
 {
   "run": { "type": "command", "command": "pnpm -r publish" },
   "webhook": { "url": "https://cdn.example.com/invalidate" },
-  "notify": { "type": "slack", "webhookUrl": "https://hooks.slack.com/...", "message": "已发布 {{tagName}}" }
+  "notify": {
+    "type": "slack",
+    "webhookUrl": "https://hooks.slack.com/...",
+    "message": "已发布 {{tagName}}"
+  }
 }
 ```
 
@@ -167,12 +198,12 @@ release publish --config-path ./my-config.json
 
 ## 环境变量
 
-| 环境变量 | 说明 |
-|----------|------|
-| `GITHUB_TOKEN` | GitHub API Token |
-| `GITHUB_APP_ID` | GitHub App ID |
-| `GITHUB_APP_PRIVATE_KEY` | GitHub App 私钥 |
-| `NPM_TOKEN` | npm 发布 Token |
+| 环境变量                 | 说明             |
+| ------------------------ | ---------------- |
+| `GITHUB_TOKEN`           | GitHub API Token |
+| `GITHUB_APP_ID`          | GitHub App ID    |
+| `GITHUB_APP_PRIVATE_KEY` | GitHub App 私钥  |
+| `NPM_TOKEN`              | npm 发布 Token   |
 
 ---
 
@@ -200,13 +231,13 @@ release publish --config-path ./my-config.json
 
 ## 插件类型总览
 
-| 接口 | 状态 | 说明 |
-|------|------|------|
-| `ChangelogFormatter` | ✅ 已实现 | 日志格式化器（当前唯一支持的插件接口） |
-| `IPlugin` | ⚠️ 类型已就位 | 通用插件接口，支持生命周期钩子（内置 preset 未实现） |
-| `ILogParser` | ⚠️ 类型已就位 | 自定义日志解析器，loader 支持 `loadLogParser` |
-| `ILineFormatter` | ⚠️ 类型已就位 | 单行格式化接口（emoji-prefix / markdown-bold 均为该类型） |
-| `ILogFormatter` | ⚠️ 类型已就位 | 整体日志格式化接口 |
+| 接口                 | 状态          | 说明                                                      |
+| -------------------- | ------------- | --------------------------------------------------------- |
+| `ChangelogFormatter` | ✅ 已实现     | 日志格式化器（当前唯一支持的插件接口）                    |
+| `IPlugin`            | ⚠️ 类型已就位 | 通用插件接口，支持生命周期钩子（内置 preset 未实现）      |
+| `ILogParser`         | ⚠️ 类型已就位 | 自定义日志解析器，loader 支持 `loadLogParser`             |
+| `ILineFormatter`     | ⚠️ 类型已就位 | 单行格式化接口（emoji-prefix / markdown-bold 均为该类型） |
+| `ILogFormatter`      | ⚠️ 类型已就位 | 整体日志格式化接口                                        |
 
 ---
 
@@ -338,19 +369,19 @@ const output = applyFormatters(loaded, entries);
 
 根据 commit type 添加 emoji 前缀：
 
-| Type | Emoji |
-|------|-------|
-| feat | ✨ |
-| fix | 🐛 |
-| docs | 📝 |
-| style | 💄 |
-| refactor | ♻️ |
-| perf | ⚡️ |
-| test | ✅ |
-| build | 📦️ |
-| ci | 👷 |
-| chore | 🔧 |
-| revert | ⏪️ |
+| Type     | Emoji |
+| -------- | ----- |
+| feat     | ✨    |
+| fix      | 🐛    |
+| docs     | 📝    |
+| style    | 💄    |
+| refactor | ♻️    |
+| perf     | ⚡️    |
+| test     | ✅    |
+| build    | 📦️    |
+| ci       | 👷    |
+| chore    | 🔧    |
+| revert   | ⏪️    |
 
 ### category-group
 
@@ -383,11 +414,7 @@ Markdown 粗体格式化：
 
 ```json
 {
-  "plugins": [
-    "emoji-prefix",
-    "category-group",
-    "markdown-bold"
-  ]
+  "plugins": ["emoji-prefix", "category-group", "markdown-bold"]
 }
 ```
 

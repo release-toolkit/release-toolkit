@@ -1,5 +1,7 @@
 # GitHub App 服务端详解 (@release-toolkit/app-server)
 
+> 本文主体描述当前 Worker 事件。目标 App Server 只做安全事件编排，不能复制 Core Planner；目标事件与权限契约以 [实施规格 P6](../implementation/README.md#p6-app-server) 为准。
+
 ## 职责定位
 
 App Server 是一个 **轻量的事件分发层**，运行在 Cloudflare Workers 上：
@@ -16,17 +18,17 @@ App Server 是一个 **轻量的事件分发层**，运行在 Cloudflare Workers
 
 ## 实现状态总览
 
-| 功能 | 状态 | 说明 |
-|------|------|------|
-| Webhook 签名验证 | ✅ 已实现 | Web Crypto HMAC-SHA256 |
-| `pull_request` 事件处理 | ✅ 已实现 | `opened`/`reopened`/`synchronize`/`edited`/`ready_for_review` |
-| `pull_request_review.submitted` (approved) | ✅ 已实现 | 写入 PR 描述体 `RELEASE-TOOLKIT-OUTPUT` 标记区 |
-| `pull_request.closed (merged)` | ✅ 已实现 | 触发 `release-publish.yml` workflow |
-| base 分支过滤 | ✅ 已实现 | 通过 `RELEASE_BASE_BRANCH` env |
-| 输出区块开关 | ✅ 已实现 | 优先读仓库 `config.json` → `prLogCollector.outputSections`，回退 `OUTPUT_SECTIONS` env |
-| 通过 `installation.id` 获取 octokit | ✅ 已实现 | `App.getInstallationOctokit` |
-| 版本 diff 表 | ✅ 已实现 | 复用 `@release-toolkit/core`：`fetchWorkspacePackagesWithOctokit` + `detectVersionChangesWithOctokit` |
-| Web UI 管理 | 🔲 规划中 | 提供可视化管理界面 |
+| 功能                                       | 状态      | 说明                                                                                                  |
+| ------------------------------------------ | --------- | ----------------------------------------------------------------------------------------------------- |
+| Webhook 签名验证                           | ✅ 已实现 | Web Crypto HMAC-SHA256                                                                                |
+| `pull_request` 事件处理                    | ✅ 已实现 | `opened`/`reopened`/`synchronize`/`edited`/`ready_for_review`                                         |
+| `pull_request_review.submitted` (approved) | ✅ 已实现 | 写入 PR 描述体 `RELEASE-TOOLKIT-OUTPUT` 标记区                                                        |
+| `pull_request.closed (merged)`             | ✅ 已实现 | 触发 `release-publish.yml` workflow                                                                   |
+| base 分支过滤                              | ✅ 已实现 | 通过 `RELEASE_BASE_BRANCH` env                                                                        |
+| 输出区块开关                               | ✅ 已实现 | 优先读仓库 `config.json` → `prLogCollector.outputSections`，回退 `OUTPUT_SECTIONS` env                |
+| 通过 `installation.id` 获取 octokit        | ✅ 已实现 | `App.getInstallationOctokit`                                                                          |
+| 版本 diff 表                               | ✅ 已实现 | 复用 `@release-toolkit/core`：`fetchWorkspacePackagesWithOctokit` + `detectVersionChangesWithOctokit` |
+| Web UI 管理                                | 🔲 规划中 | 提供可视化管理界面                                                                                    |
 
 ---
 
@@ -77,8 +79,8 @@ flowchart TD
 ```jsonc
 {
   "notification": true, // 顶部「待审批」状态 + 版本 diff 表
-  "preview": true,      // 中部：按变更包列出 - title + bullets
-  "editGuide": true     // 底部：折叠的「如何修改变更日志」
+  "preview": true, // 中部：按变更包列出 - title + bullets
+  "editGuide": true, // 底部：折叠的「如何修改变更日志」
 }
 ```
 
@@ -88,32 +90,32 @@ flowchart TD
 
 ## 内部函数概览
 
-| 函数 | 说明 |
-|------|------|
-| `verifySignature` | Web Crypto HMAC-SHA256，比较 `sha256=` 前缀 |
-| `parseReleaseLog` | 见 `@release-toolkit/markdown`（本包 re-export） |
-| `extractReleaseLog` | 从 PR body 中截取 `<!-- RELEASE-LOG-START/END -->` 区域 |
-| `formatTitleBulletWithEmoji` / `formatChangeLogBulletsPlain` | 来自 `@release-toolkit/markdown` |
-| `resolvePRVersionState` | 读仓库 `config.json` 的 `workspaceFile`，调用 core 做 workspace + 版本 diff |
-| `fetchRepoToolkitConfig` | 从 PR head 读取 `.release-toolkit/config.json` |
-| `resolveOutputSectionsForPR` | 合并 config / env 的 `outputSections` |
-| `findToolComment` / `upsertPRComment` | 通过 `release-toolkit-comment-start` 锚点上 upsert 评论 |
-| `upsertOutputInBody` | 幂等替换 PR 描述体中的 `RELEASE-TOOLKIT-OUTPUT` 标记区 |
-| `dispatchWorkflow` | `actions.createWorkflowDispatch` 触发 CI |
-| `acquireOctokit` | 优先用 `App.getInstallationOctokit`，回落到匿名 |
+| 函数                                                         | 说明                                                                        |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `verifySignature`                                            | Web Crypto HMAC-SHA256，比较 `sha256=` 前缀                                 |
+| `parseReleaseLog`                                            | 见 `@release-toolkit/markdown`（本包 re-export）                            |
+| `extractReleaseLog`                                          | 从 PR body 中截取 `<!-- RELEASE-LOG-START/END -->` 区域                     |
+| `formatTitleBulletWithEmoji` / `formatChangeLogBulletsPlain` | 来自 `@release-toolkit/markdown`                                            |
+| `resolvePRVersionState`                                      | 读仓库 `config.json` 的 `workspaceFile`，调用 core 做 workspace + 版本 diff |
+| `fetchRepoToolkitConfig`                                     | 从 PR head 读取 `.release-toolkit/config.json`                              |
+| `resolveOutputSectionsForPR`                                 | 合并 config / env 的 `outputSections`                                       |
+| `findToolComment` / `upsertPRComment`                        | 通过 `release-toolkit-comment-start` 锚点上 upsert 评论                     |
+| `upsertOutputInBody`                                         | 幂等替换 PR 描述体中的 `RELEASE-TOOLKIT-OUTPUT` 标记区                      |
+| `dispatchWorkflow`                                           | `actions.createWorkflowDispatch` 触发 CI                                    |
+| `acquireOctokit`                                             | 优先用 `App.getInstallationOctokit`，回落到匿名                             |
 
 ---
 
 ## 环境变量
 
-| 变量 | 必填 | 默认 | 说明 |
-|------|------|------|------|
-| `GITHUB_APP_ID` | ⚠️ App 模式 | - | GitHub App ID |
-| `GITHUB_APP_PRIVATE_KEY` | ⚠️ App 模式 | - | PEM 私钥（PKCS#8） |
-| `GITHUB_WEBHOOK_SECRET` | 推荐 | - | Webhook 签名密钥（缺失时跳过验证，仅供 dev） |
-| `RELEASE_BASE_BRANCH` | ❌ | `dev` | 触发收集/发布的目标分支 |
-| `RELEASE_PUBLISH_WORKFLOW` | ❌ | `release-publish.yml` | 合并后触发的 workflow 文件名 |
-| `OUTPUT_SECTIONS` | ❌ | 全部 `true` | 评论输出区块开关 JSON |
+| 变量                       | 必填        | 默认                  | 说明                                         |
+| -------------------------- | ----------- | --------------------- | -------------------------------------------- |
+| `GITHUB_APP_ID`            | ⚠️ App 模式 | -                     | GitHub App ID                                |
+| `GITHUB_APP_PRIVATE_KEY`   | ⚠️ App 模式 | -                     | PEM 私钥（PKCS#8）                           |
+| `GITHUB_WEBHOOK_SECRET`    | 推荐        | -                     | Webhook 签名密钥（缺失时跳过验证，仅供 dev） |
+| `RELEASE_BASE_BRANCH`      | ❌          | `dev`                 | 触发收集/发布的目标分支                      |
+| `RELEASE_PUBLISH_WORKFLOW` | ❌          | `release-publish.yml` | 合并后触发的 workflow 文件名                 |
+| `OUTPUT_SECTIONS`          | ❌          | 全部 `true`           | 评论输出区块开关 JSON                        |
 
 ---
 
@@ -159,6 +161,22 @@ pnpm --filter @release-toolkit/app-server deploy
 ```
 
 ---
+
+## 目标事件分发
+
+| 事件                                          | 目标行为                                                         |
+| --------------------------------------------- | ---------------------------------------------------------------- |
+| Feature PR opened/reopened/synchronize/edited | dispatch collect/validate，upsert Feature 日志预览               |
+| Feature PR merged                             | 不发布；Change Entry 随分支进入 queue                            |
+| `release/*` PR opened/reopened/synchronize    | dispatch plan refresh，更新一级 package checkbox 与日志          |
+| release-toolkit 工具评论 edited               | 校验 actor、anchor、plan/revision/key，持久化 selection/override |
+| `release/*` PR merged                         | dispatch Locked Plan publish workflow                            |
+| Release PR closed-unmerged                    | cancel draft plan，不消费 Entry                                  |
+| `/release refresh`                            | 校验权限后 dispatch 同一 refresh workflow                        |
+
+目标流程取消“代码 Approve 即冻结日志/写回发布结果”的强绑定。兼容期可保留旧事件开关，但默认目标流程必须以 Feature PR 日志循环和 Release PR 合并为边界。
+
+App Server 的输出必须是事件参数或 API 调用结果；package 选择、依赖闭包、版本计算和发布矩阵全部由 Core/Actions 完成。
 
 ## 依赖
 

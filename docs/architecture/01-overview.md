@@ -1,5 +1,7 @@
 # 项目概览与目录结构
 
+> 本文前半部分描述当前仓库结构。目标包职责和实施顺序以 [Release Plan v1 可执行实施规格](../implementation/README.md) 为准。
+
 ## Monorepo 结构
 
 ```
@@ -63,52 +65,69 @@ flowchart TB
 
 ## 各包职责速览
 
-| 包名 | 职责 | 入口文件 |
-|------|------|----------|
-| `@release-toolkit/types` | 共享 TypeScript 类型定义（零运行时依赖） | `dist/index.mjs` |
-| `@release-toolkit/markdown` | Markdown 工具函数（列表、RELEASE-LOG 解析、emoji 前缀） | `dist/index.mjs` |
-| `@release-toolkit/core` | 版本检测、changelog 引擎、插件系统、CI 层 | `dist/index.mjs` |
-| `@release-toolkit/cli` | 命令行界面 | `dist/index.mjs` |
-| `@release-toolkit/changelog-presets` | 预设格式化器 | `dist/index.mjs` |
-| `@release-toolkit/app-server` | GitHub App Webhook（Cloudflare Worker） | `dist/index.mjs` |
+| 包名                                 | 职责                                                    | 入口文件         |
+| ------------------------------------ | ------------------------------------------------------- | ---------------- |
+| `@release-toolkit/types`             | 共享 TypeScript 类型定义（零运行时依赖）                | `dist/index.mjs` |
+| `@release-toolkit/markdown`          | Markdown 工具函数（列表、RELEASE-LOG 解析、emoji 前缀） | `dist/index.mjs` |
+| `@release-toolkit/core`              | 版本检测、changelog 引擎、插件系统、CI 层               | `dist/index.mjs` |
+| `@release-toolkit/cli`               | 命令行界面                                              | `dist/index.mjs` |
+| `@release-toolkit/changelog-presets` | 预设格式化器                                            | `dist/index.mjs` |
+| `@release-toolkit/app-server`        | GitHub App Webhook（Cloudflare Worker）                 | `dist/index.mjs` |
 
-## 核心功能
+## 当前核心功能
 
-| 功能 | 触发时机 | 说明 |
-|------|----------|------|
-| `prLogCollector` | PR → `branches.base`（默认 dev） | 收集 PR 变更日志 |
-| `releasePreview` | PR → `branches.base` | 版本发布预览 |
-| `releasePublisher` | PR 合并到 `branches.base` | 执行版本发布 |
+| 功能               | 触发时机                         | 说明             |
+| ------------------ | -------------------------------- | ---------------- |
+| `prLogCollector`   | PR → `branches.base`（默认 dev） | 收集 PR 变更日志 |
+| `releasePreview`   | PR → `branches.base`             | 版本发布预览     |
+| `releasePublisher` | PR 合并到 `branches.base`        | 执行版本发布     |
+
+> 当前实现的三条能力线尚未由统一的 Release Plan 串联。发布计划中心架构及后续演进方向见 [09-release-plan-architecture.md](./09-release-plan-architecture.md)。
 
 ## 技术栈
 
-| 技术 | 用途 |
-|------|------|
-| TypeScript | 类型安全 |
-| tsdown | 快速构建 ESM 库 |
-| commander | CLI 参数解析 |
-| octokit | GitHub API 客户端 |
-| simple-git | Git 操作（CI runner） |
-| semver | 语义化版本处理 |
-| Cloudflare Workers | GitHub App 部署目标 |
+| 技术               | 用途                  |
+| ------------------ | --------------------- |
+| TypeScript         | 类型安全              |
+| tsdown             | 快速构建 ESM 库       |
+| commander          | CLI 参数解析          |
+| octokit            | GitHub API 客户端     |
+| simple-git         | Git 操作（CI runner） |
+| semver             | 语义化版本处理        |
+| Cloudflare Workers | GitHub App 部署目标   |
 
 ## 构建配置
 
 ```typescript
 // tsdown.config.ts
 export default defineConfig({
-  format: ['esm'],      // 仅输出 ESM 格式
-  dts: true,            // 生成 .d.ts 类型声明
-  sourcemap: false,     // 不生成 sourcemap
-  clean: true,          // 每次构建前清理
+  format: ['esm'], // 仅输出 ESM 格式
+  dts: true, // 生成 .d.ts 类型声明
+  sourcemap: false, // 不生成 sourcemap
+  clean: true, // 每次构建前清理
 });
 ```
 
-## 架构特点
+## 当前架构特点与边界
 
-1. **关注点分离**：core（功能）、cli（界面）、presets（格式化）、markdown（纯文本）职责清晰
+1. **包级关注点分离**：core（功能）、cli（界面）、presets（格式化）、markdown（纯文本）职责清晰
 2. **插件化设计**：支持自定义 changelog 格式化器；Worker 侧用 markdown 内置 emoji 保底
 3. **零配置可用**：提供合理默认值，开箱即用
 4. **幂等更新**：PR 描述体 / 评论更新支持幂等（`upsertOutputInBody`）
 5. **CI 友好**：设计为 GitHub Actions 工作流集成
 6. **Monorepo 支持**：workspace 配置 + API 双模式版本检测
+
+上述特点描述的是当前实现能力，不等同于目标发布模型。尤其是发布范围选择、版本策略和 workspace 依赖联动，当前仍主要依赖版本差异检测；目标职责划分以 [09-release-plan-architecture.md](./09-release-plan-architecture.md) 为准。
+
+## 目标包职责
+
+| package                              | 目标职责                                                                            |
+| ------------------------------------ | ----------------------------------------------------------------------------------- |
+| `@release-toolkit/types`             | Change Entry、Release Plan、selection、workspace graph、发布结果的唯一类型源        |
+| `@release-toolkit/markdown`          | legacy marker 兼容、工具评论、一级 package checkbox 和日志区的纯函数解析/渲染       |
+| `@release-toolkit/core`              | collector、queue、planner、workspace graph、version resolver、plan store、publisher |
+| `@release-toolkit/cli`               | 为 GitHub Actions 提供可组合命令、JSON 输出和 dry-run                               |
+| `@release-toolkit/changelog-presets` | EntryFormatter 和 ReleaseFormatter，不参与版本与发布范围决策                        |
+| `@release-toolkit/app-server`        | Webhook、权限、评论和 workflow dispatch，不复制 Planner                             |
+
+目标依赖方向仍应保持 `app-server/cli → core → types/markdown`，公共模型只能从 `types` 导出。完整文件级任务见 [实施规格 P1 至 P8](../implementation/README.md#8-实施阶段)。

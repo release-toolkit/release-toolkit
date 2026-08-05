@@ -1,5 +1,7 @@
 # CLI 模块详解 (@release-toolkit/cli)
 
+> 本文主体描述当前三个命令。目标 CLI 是 GitHub Actions 的稳定执行接口，命令契约见 [实施规格第 6 节](../implementation/README.md#6-cli-与-workflow-契约)。
+
 ## 模块结构
 
 ```
@@ -34,11 +36,11 @@ program.parse();
 
 ## 命令列表
 
-| 命令 | 功能 | 对应 core 模块 |
-|------|------|----------------|
-| `release collect` | PR 日志收集 | `pr-log-collector` |
-| `release preview` | 版本发布预览 | `release-preview` |
-| `release publish` | 发布版本 | `release-publisher` |
+| 命令              | 功能         | 对应 core 模块      |
+| ----------------- | ------------ | ------------------- |
+| `release collect` | PR 日志收集  | `pr-log-collector`  |
+| `release preview` | 版本发布预览 | `release-preview`   |
+| `release publish` | 发布版本     | `release-publisher` |
 
 ## 使用示例
 
@@ -60,3 +62,16 @@ npx release publish
 
 - `@release-toolkit/core` — 核心功能
 - `commander` — 命令行解析
+
+## 目标命令
+
+| 命令                      | 责任                                    | 外部写入                     |
+| ------------------------- | --------------------------------------- | ---------------------------- |
+| `release change collect`  | 收集 Feature PR 日志并生成 Entry        | 可选，必须支持 dry-run       |
+| `release change validate` | 校验 Entry/no-release                   | 无                           |
+| `release plan prepare`    | 创建 Draft Plan 所需文件                | 可选，必须支持 dry-run       |
+| `release plan refresh`    | 合并 pending Entry、selection、override | 可选，必须校验 revision      |
+| `release plan lock`       | 生成不可变 plan snapshot                | 写 release branch            |
+| `release publish`         | 执行 Locked Plan                        | Tag、Release、Registry/hooks |
+
+所有命令必须支持 `--cwd`、`--config-path`、`--json`；改变状态的命令必须支持 `--dry-run`。JSON 输出是 Actions 间的数据契约，不能从人类可读日志反向解析。

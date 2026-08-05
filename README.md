@@ -2,7 +2,11 @@
 
 CI 驱动的 **Monorepo 发布工具链** —— 自动收集 PR 变更日志、聚合版本发布、创建 GitHub Release。
 
+文档统一入口：[docs/README.md](./docs/README.md)。需要交给 AI 实施目标架构时，从 [Release Plan v1 可执行实施规格](./docs/implementation/README.md) 开始。
+
 ## 整体流程
+
+> 当前实现以 `collect`、`preview`、`publish` 三个命令为主。后续架构将增加贯穿全周期的 Release Plan：先生成并确认发布计划，再由 publisher 严格执行。完整设计见 [发布计划中心架构](./docs/architecture/09-release-plan-architecture.md)。
 
 ```mermaid
 flowchart TD
@@ -37,11 +41,25 @@ flowchart TD
 
 ## 三大核心命令
 
-| 命令 | 功能 | 触发时机 |
-|------|------|----------|
-| `release collect` | 收集 PR 日志，写入 PR 描述体 | PR 提交时 |
-| `release preview` | 版本发布预览，检测版本变更并评论 | PR 预览时 |
+| 命令              | 功能                                     | 触发时机  |
+| ----------------- | ---------------------------------------- | --------- |
+| `release collect` | 收集 PR 日志，写入 PR 描述体             | PR 提交时 |
+| `release preview` | 版本发布预览，检测版本变更并评论         | PR 预览时 |
 | `release publish` | 创建 Git Tag + GitHub Release + 执行钩子 | PR 合并时 |
+
+### 目标发布模型
+
+```mermaid
+flowchart TD
+    A["Feature PR 收集和更新日志"] --> B["合并后进入 Release Queue"]
+    B --> C["创建 release/xxx PR"]
+    C --> D["聚合日志并生成一级 package checkbox"]
+    D --> E["调整发布选择和日志"]
+    E --> F["合并 release/xxx PR"]
+    F --> G["仅发布 selected package"]
+```
+
+`collect` 负责收集，格式化插件负责输出，Release Plan 负责发布决策，`publish` 负责执行。当前实现与目标架构的差异请见 [架构文档](./docs/architecture/README.md)。
 
 ## CLI 使用
 
@@ -53,16 +71,16 @@ $ release collect --pr-number 123 --owner my-org --repo my-repo --no-save
 $ release collect --pr-number 123 --owner my-org --repo my-repo --config-path ./config.release.json
 ```
 
-| 选项 | 说明 | 默认值 |
-|------|------|--------|
-| `--pr-number` | PR 编号 | 必填 |
-| `--owner` | 仓库所有者 | 必填 |
-| `--repo` | 仓库名称 | 必填 |
-| `--token` | GitHub Token | `GITHUB_TOKEN` 环境变量 |
-| `--save` | 保存快照到 `.release-toolkit/releases/` | `true` |
-| `--no-save` | 不保存快照 | - |
-| `--cwd` | 工作目录 | `process.cwd()` |
-| `--config-path` | 配置文件路径 | `.release-toolkit/config.json` |
+| 选项            | 说明                                    | 默认值                         |
+| --------------- | --------------------------------------- | ------------------------------ |
+| `--pr-number`   | PR 编号                                 | 必填                           |
+| `--owner`       | 仓库所有者                              | 必填                           |
+| `--repo`        | 仓库名称                                | 必填                           |
+| `--token`       | GitHub Token                            | `GITHUB_TOKEN` 环境变量        |
+| `--save`        | 保存快照到 `.release-toolkit/releases/` | `true`                         |
+| `--no-save`     | 不保存快照                              | -                              |
+| `--cwd`         | 工作目录                                | `process.cwd()`                |
+| `--config-path` | 配置文件路径                            | `.release-toolkit/config.json` |
 
 ### preview —— 版本发布预览
 
@@ -70,13 +88,13 @@ $ release collect --pr-number 123 --owner my-org --repo my-repo --config-path ./
 $ release preview --pr-number 123 --owner my-org --repo my-repo
 ```
 
-| 选项 | 说明 | 默认值 |
-|------|------|--------|
-| `--pr-number` | PR 编号 | 必填 |
-| `--owner` | 仓库所有者 | 必填 |
-| `--repo` | 仓库名称 | 必填 |
-| `--token` | GitHub Token | `GITHUB_TOKEN` 环境变量 |
-| `--cwd` | 工作目录 | `process.cwd()` |
+| 选项            | 说明         | 默认值                         |
+| --------------- | ------------ | ------------------------------ |
+| `--pr-number`   | PR 编号      | 必填                           |
+| `--owner`       | 仓库所有者   | 必填                           |
+| `--repo`        | 仓库名称     | 必填                           |
+| `--token`       | GitHub Token | `GITHUB_TOKEN` 环境变量        |
+| `--cwd`         | 工作目录     | `process.cwd()`                |
 | `--config-path` | 配置文件路径 | `.release-toolkit/config.json` |
 
 ### publish —— 版本发布
@@ -87,64 +105,60 @@ $ release publish --dry-run                    # 本地预演（不创建任何�
 $ release publish --owner my-org --repo my-repo # 显式指定仓库
 ```
 
-| 选项 | 说明 | 默认值 |
-|------|------|--------|
-| `--owner` | 仓库所有者 | 从 `GITHUB_REPOSITORY` 读取 |
-| `--repo` | 仓库名称 | 从 `GITHUB_REPOSITORY` 读取 |
-| `--token` | GitHub Token | `GITHUB_TOKEN` 环境变量 |
-| `--dry-run` | 空跑模式 | `false` |
-| `--cwd` | 工作目录 | `process.cwd()` |
+| 选项            | 说明         | 默认值                         |
+| --------------- | ------------ | ------------------------------ |
+| `--owner`       | 仓库所有者   | 从 `GITHUB_REPOSITORY` 读取    |
+| `--repo`        | 仓库名称     | 从 `GITHUB_REPOSITORY` 读取    |
+| `--token`       | GitHub Token | `GITHUB_TOKEN` 环境变量        |
+| `--dry-run`     | 空跑模式     | `false`                        |
+| `--cwd`         | 工作目录     | `process.cwd()`                |
 | `--config-path` | 配置文件路径 | `.release-toolkit/config.json` |
 
 ## 生命周期钩子
 
 ### releasePublisher 钩子
 
-| 钩子 | 触发时机 | 用途 |
-|------|----------|------|
-| `beforePublish` | 发布流程开始前 | 预检查、构建验证 |
-| `beforeTag` | 创建 Git Tag 前 | 自定义 tag 格式、额外校验 |
-| `afterRelease` | GitHub Release 创建后 | 部署到 CDN、发送通知 |
-| `afterPublish` | 全部发布完成后 | 清理、统计、总结 |
+| 钩子            | 触发时机              | 用途                      |
+| --------------- | --------------------- | ------------------------- |
+| `beforePublish` | 发布流程开始前        | 预检查、构建验证          |
+| `beforeTag`     | 创建 Git Tag 前       | 自定义 tag 格式、额外校验 |
+| `afterRelease`  | GitHub Release 创建后 | 部署到 CDN、发送通知      |
+| `afterPublish`  | 全部发布完成后        | 清理、统计、总结          |
 
 ### prLogCollector 钩子（插件）
 
-| 钩子 | 触发时机 |
-|------|----------|
-| `beforeCollect` | 收集 PR 日志前 |
-| `afterCollect` | 收集完成/失败后 |
+| 钩子            | 触发时机        |
+| --------------- | --------------- |
+| `beforeCollect` | 收集 PR 日志前  |
+| `afterCollect`  | 收集完成/失败后 |
 
 ### releasePreview 钩子（插件）
 
-| 钩子 | 触发时机 |
-|------|----------|
+| 钩子            | 触发时机   |
+| --------------- | ---------- |
 | `beforePreview` | 预览生成前 |
-| `afterPreview` | 预览生成后 |
+| `afterPreview`  | 预览生成后 |
 
 ## 钩子执行方式
 
 支持三种执行方式：
 
-| 类型 | 说明 | 示例 |
-|------|------|------|
-| `command` | Shell 命令 | `{ "type": "command", "command": "pnpm -r publish" }` |
-| `script` | 项目脚本文件 | `{ "type": "script", "script": "./scripts/release.js" }` |
-| `package` | npm 包 | `{ "type": "package", "name": "semantic-release", "args": [] }` |
+| 类型      | 说明         | 示例                                                            |
+| --------- | ------------ | --------------------------------------------------------------- |
+| `command` | Shell 命令   | `{ "type": "command", "command": "pnpm -r publish" }`           |
+| `script`  | 项目脚本文件 | `{ "type": "script", "script": "./scripts/release.js" }`        |
+| `package` | npm 包       | `{ "type": "package", "name": "semantic-release", "args": [] }` |
 
 ```json
 {
   "releasePublisher": {
-    "beforeTag": [
-      { "type": "command", "command": "pnpm build" }
-    ],
+    "beforeTag": [{ "type": "command", "command": "pnpm build" }],
     "afterRelease": [
       { "type": "command", "command": "pnpm -r publish --access public" },
       { "type": "script", "script": "./scripts/notify.js" },
       { "type": "package", "name": "@myorg/release-notify", "args": ["--channel", "#releases"] }
     ],
-    "afterPublish": [
-      { "type": "command", "command": "pnpm -r deploy" }
-    ]
+    "afterPublish": [{ "type": "command", "command": "pnpm -r deploy" }]
   }
 }
 ```
@@ -226,44 +240,44 @@ graph LR
 
 #### 分支配置
 
-| 字段 | 说明 | 默认值 |
-|------|------|--------|
-| `branches.base` | 目标分支（PR 日志收集、版本预览与发布共用） | `dev` |
+| 字段            | 说明                                        | 默认值 |
+| --------------- | ------------------------------------------- | ------ |
+| `branches.base` | 目标分支（PR 日志收集、版本预览与发布共用） | `dev`  |
 
 #### PR 日志收集器配置
 
-| 字段 | 说明 | 默认值 |
-|------|------|--------|
-| `prLogCollector.releaseLogMarker.start` | 日志标记开始 | `<!-- RELEASE-LOG-START -->` |
-| `prLogCollector.releaseLogMarker.end` | 日志标记结束 | `<!-- RELEASE-LOG-END -->` |
-| `prLogCollector.outputSections.notification` | 是否显示通知区块 | `true` |
-| `prLogCollector.outputSections.preview` | 是否显示预览区块 | `true` |
-| `prLogCollector.outputSections.editGuide` | 是否显示编辑指南 | `true` |
-| `prLogCollector.logExtraction.source` | 日志提取来源（`comment` / `pr-body`） | `comment` |
-| `prLogCollector.logExtraction.commentPosition` | 评论位置（`first` / `latest`） | `first` |
+| 字段                                           | 说明                                  | 默认值                       |
+| ---------------------------------------------- | ------------------------------------- | ---------------------------- |
+| `prLogCollector.releaseLogMarker.start`        | 日志标记开始                          | `<!-- RELEASE-LOG-START -->` |
+| `prLogCollector.releaseLogMarker.end`          | 日志标记结束                          | `<!-- RELEASE-LOG-END -->`   |
+| `prLogCollector.outputSections.notification`   | 是否显示通知区块                      | `true`                       |
+| `prLogCollector.outputSections.preview`        | 是否显示预览区块                      | `true`                       |
+| `prLogCollector.outputSections.editGuide`      | 是否显示编辑指南                      | `true`                       |
+| `prLogCollector.logExtraction.source`          | 日志提取来源（`comment` / `pr-body`） | `comment`                    |
+| `prLogCollector.logExtraction.commentPosition` | 评论位置（`first` / `latest`）        | `first`                      |
 
 #### 发布预览配置
 
-| 字段 | 说明 | 默认值 |
-|------|------|--------|
-| `releasePreview.workspaceFile` | Monorepo 配置文件 | `pnpm-workspace.yaml` |
+| 字段                             | 说明               | 默认值                                   |
+| -------------------------------- | ------------------ | ---------------------------------------- |
+| `releasePreview.workspaceFile`   | Monorepo 配置文件  | `pnpm-workspace.yaml`                    |
 | `releasePreview.noChangeMessage` | 无版本变更时的提示 | `⚠️ 本次 PR 未检测到任何包的版本变更...` |
 
 #### 发布器配置
 
-| 字段 | 说明 | 默认值 |
-|------|------|--------|
-| `releasePublisher.createGithubRelease` | 是否创建 GitHub Release | `true` |
-| `releasePublisher.gitTags.format` | Tag 格式（支持 `{packageName}` 和 `{version}` 占位符） | `{packageName}@{version}` |
-| `releasePublisher.gitTags.message` | Release message 格式 | `Release {packageName}@{version}` |
+| 字段                                   | 说明                                                   | 默认值                            |
+| -------------------------------------- | ------------------------------------------------------ | --------------------------------- |
+| `releasePublisher.createGithubRelease` | 是否创建 GitHub Release                                | `true`                            |
+| `releasePublisher.gitTags.format`      | Tag 格式（支持 `{packageName}` 和 `{version}` 占位符） | `{packageName}@{version}`         |
+| `releasePublisher.gitTags.message`     | Release message 格式                                   | `Release {packageName}@{version}` |
 
 #### 插件
 
-| 插件名 | 功能 |
-|--------|------|
-| `emoji-prefix` | 根据 commit 类型添加 emoji 前缀 |
-| `category-group` | 按 commit 类型分组 |
-| `markdown-bold` | 将 scope 加粗显示 |
+| 插件名           | 功能                            |
+| ---------------- | ------------------------------- |
+| `emoji-prefix`   | 根据 commit 类型添加 emoji 前缀 |
+| `category-group` | 按 commit 类型分组              |
+| `markdown-bold`  | 将 scope 加粗显示               |
 
 ## App Server（GitHub App）
 
@@ -271,24 +285,24 @@ graph LR
 
 ### 支持的事件
 
-| 事件 | 行为 |
-|------|------|
-| `pull_request` (opened/reopened/synchronize/edited/ready_for_review) | 收集 PR 日志并评论 |
-| `pull_request` (closed + merged) | 触发 `release-publish` workflow |
-| `pull_request_review` (submitted + approved) | 将确认后的日志写入 PR 描述体 |
-| `repository_dispatch` | 手动重试入口 |
+| 事件                                                                 | 行为                            |
+| -------------------------------------------------------------------- | ------------------------------- |
+| `pull_request` (opened/reopened/synchronize/edited/ready_for_review) | 收集 PR 日志并评论              |
+| `pull_request` (closed + merged)                                     | 触发 `release-publish` workflow |
+| `pull_request_review` (submitted + approved)                         | 将确认后的日志写入 PR 描述体    |
+| `repository_dispatch`                                                | 手动重试入口                    |
 
 ### 环境变量
 
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `GITHUB_APP_ID` | GitHub App ID | - |
-| `GITHUB_APP_PRIVATE_KEY` | GitHub App 私钥 | - |
-| `GITHUB_TOKEN` | GitHub Token | - |
-| `GITHUB_WEBHOOK_SECRET` | Webhook 签名密钥 | - |
-| `RELEASE_BASE_BRANCH` | 目标分支 | `dev` |
+| 变量                       | 说明                 | 默认值                |
+| -------------------------- | -------------------- | --------------------- |
+| `GITHUB_APP_ID`            | GitHub App ID        | -                     |
+| `GITHUB_APP_PRIVATE_KEY`   | GitHub App 私钥      | -                     |
+| `GITHUB_TOKEN`             | GitHub Token         | -                     |
+| `GITHUB_WEBHOOK_SECRET`    | Webhook 签名密钥     | -                     |
+| `RELEASE_BASE_BRANCH`      | 目标分支             | `dev`                 |
 | `RELEASE_PUBLISH_WORKFLOW` | 发布 workflow 文件名 | `release-publish.yml` |
-| `OUTPUT_SECTIONS` | 输出区块配置（JSON） | - |
+| `OUTPUT_SECTIONS`          | 输出区块配置（JSON） | -                     |
 
 ## License
 
