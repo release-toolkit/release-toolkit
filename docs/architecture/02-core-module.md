@@ -14,8 +14,8 @@
 | `shared/plugins` | ✅ 已实现 | `ChangelogFormatter` + `IPlugin` 加载器 |
 | `shared/hook-runner` | ✅ 已实现 | 调用插件 `beforeCollect/afterCollect/...` 钩子 |
 | `IPlugin` 通用插件接口 | ✅ 类型已就位 | 内置 preset 暂未实现生命周期钩子 |
-| `ILogParser` 自定义日志解析 | 🔲 规划中 | 替换默认解析逻辑 |
-| 配置继承（`.local/config.json`） | 🔲 规划中 | 多配置文件 deepMerge |
+| `ILogParser` 自定义日志解析 | ✅ 已实现 | `loadLogParser` 已接入配置；默认解析仍走 `parseChangelog` |
+| 配置继承（`.local/config.json`） | ✅ 已实现 | 多配置文件 deepMerge |
 
 ---
 

@@ -1,9 +1,9 @@
 import type { ChangelogFormatter } from '../../shared/plugins/types.js';
 import { applyFormatters, applyFormatLine, parseChangelog } from '../../shared/plugins/index.js';
+import type { ChangelogEntry } from '@release-toolkit/types';
 import {
   formatChangeLogBulletsFromBody,
   formatTitleBulletLine,
-  toBulletLines,
 } from '@release-toolkit/markdown';
 
 export { toBulletLines } from '@release-toolkit/markdown';
@@ -37,9 +37,10 @@ export function formatTitleBullet(
 export function formatChangeLogBullets(
   changeLog: string,
   formatters: ChangelogFormatter[],
+  parse: (text: string) => ChangelogEntry[] = parseChangelog,
 ): string[] {
   return formatChangeLogBulletsFromBody(changeLog, (trimmed) => {
-    const entries = parseChangelog(trimmed);
+    const entries = parse(trimmed);
     if (entries.length > 0) {
       return applyFormatters(entries, formatters);
     }

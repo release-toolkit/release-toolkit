@@ -54,7 +54,7 @@ npx release publish
 ```
 
 > 目标分支由 `.release-toolkit/config.json` 的 `branches.base` 控制，
-> 目前 CLI 暂未提供 `--branch` 覆盖 flag。
+> `release preview` / `release publish` 支持 `--branch` 覆盖 flag。
 
 ## 依赖
 

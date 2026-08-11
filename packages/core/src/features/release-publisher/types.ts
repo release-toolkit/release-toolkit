@@ -12,4 +12,6 @@ export interface ReleasePublisherOptions {
   owner?: string;
   repo?: string;
   token?: string;
+  /** 覆盖配置 branches.base 的目标分支 */
+  branch?: string;
 }

@@ -38,4 +38,24 @@ describe('formatChangeLogBullets', () => {
     const bullets = formatChangeLogBullets('- feat: 新增登录\n- fix: 修复', []);
     expect(bullets).toEqual(['- feat: 新增登录', '- fix: 修复']);
   });
+
+  it('should use custom log parser when provided (ILogParser)', () => {
+    // 自定义解析器：把每行包装为带类型的结构化条目，仅保留 type/subject
+    const customParse = (text: string) =>
+      text
+        .split('\n')
+        .filter((l) => l.trim())
+        .map((line) => {
+          const [type, ...rest] = line.split(':');
+          return { type: type.trim(), subject: rest.join(':').trim() };
+        });
+
+    const bullets = formatChangeLogBullets(
+      'feat: 新增登录\nfix: 修复bug',
+      [],
+      customParse,
+    );
+    // 自定义解析器将每行拆为 type/subject，默认格式化器仅保留 subject
+    expect(bullets).toEqual(['- 新增登录', '- 修复bug']);
+  });
 });

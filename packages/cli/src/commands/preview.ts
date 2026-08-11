@@ -10,6 +10,7 @@ export const previewCommand = new Command('preview')
   .requiredOption('--owner <owner>', '仓库所有者')
   .requiredOption('--repo <repo>', '仓库名称')
   .option('--token <token>', 'GitHub Token，默认读取 GITHUB_TOKEN', process.env.GITHUB_TOKEN)
+  .option('--branch <branch>', '覆盖配置 branches.base 的目标分支（默认读取配置）')
   .option('--cwd <path>', '工作目录', process.cwd())
   .option(
     '--config-path <path>',
@@ -20,6 +21,7 @@ export const previewCommand = new Command('preview')
     `
 示例：
   $ release preview --pr-number 123 --owner my-org --repo my-repo
+  $ release preview --pr-number 123 --owner my-org --repo my-repo --branch main
 `,
   )
   .action(async (options) => {
@@ -36,6 +38,7 @@ export const previewCommand = new Command('preview')
       token: options.token,
       cwd: options.cwd,
       configPath: options.configPath,
+      branch: options.branch,
     });
 
     if (result.success) {

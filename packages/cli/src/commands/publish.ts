@@ -9,6 +9,7 @@ export const publishCommand = new Command('publish')
   .option('--owner <owner>', '仓库所有者（默认读取 GITHUB_REPOSITORY）')
   .option('--repo <repo>', '仓库名称（默认读取 GITHUB_REPOSITORY）')
   .option('--token <token>', 'GitHub Token，默认读取 GITHUB_TOKEN', process.env.GITHUB_TOKEN)
+  .option('--branch <branch>', '覆盖配置 branches.base 的目标分支（默认读取配置）')
   .option('--dry-run', '空跑模式，不实际创建 Tag/Release，也不执行钩子', false)
   .option('--cwd <path>', '工作目录', process.cwd())
   .option(
@@ -27,6 +28,9 @@ export const publishCommand = new Command('publish')
 
   # 显式指定仓库
   $ release publish --owner my-org --repo my-repo
+
+  # 覆盖目标分支
+  $ release publish --owner my-org --repo my-repo --branch main
 `,
   )
   .action(async (options) => {
@@ -37,6 +41,7 @@ export const publishCommand = new Command('publish')
       owner: options.owner,
       repo: options.repo,
       token: options.token,
+      branch: options.branch,
     });
 
     if (result.success) {

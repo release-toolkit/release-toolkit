@@ -1,5 +1,5 @@
 import { readFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
 
 /**
  * Hook 执行方式
@@ -124,6 +124,11 @@ export interface PRLogCollectorConfig {
     source: 'comment' | 'pr-body';
     commentPosition?: 'first' | 'latest';
   };
+  /**
+   * 自定义日志解析器名称（内置 `'default'`，或模块名/文件路径）。
+   * 用于替换默认的 parseChangelog 解析逻辑。
+   */
+  logParser?: string;
 }
 
 /**
@@ -177,6 +182,9 @@ export interface ReleaseToolkitConfig {
 
 const CONFIG_DIR = '.release-toolkit';
 const CONFIG_FILE = 'config.json';
+/** 本地覆盖配置目录（与主配置同级，用于开发环境覆盖，优先级最高） */
+const LOCAL_CONFIG_DIR = '.local';
+const LOCAL_CONFIG_FILE = 'config.json';
 
 const DEFAULT_CONFIG: ReleaseToolkitConfig = {
   branches: {
@@ -196,6 +204,7 @@ const DEFAULT_CONFIG: ReleaseToolkitConfig = {
       source: 'comment',
       commentPosition: 'first',
     },
+    logParser: 'default',
   },
   releasePreview: {
     workspaceFile: 'pnpm-workspace.yaml',
@@ -223,6 +232,11 @@ export interface LoadConfigOptions {
   cwd?: string;
   /** 配置文件绝对或相对路径，默认 `<cwd>/.release-toolkit/config.json` */
   configPath?: string;
+  /**
+   * 是否启用本地覆盖配置 `.local/config.json`（与主配置同级）。
+   * 默认 true。禁用后仅加载主配置文件。
+   */
+  localOverrides?: boolean;
 }
 
 export function loadConfig(cwd?: string): ReleaseToolkitConfig;
@@ -238,23 +252,48 @@ export function loadConfig(
     typeof cwdOrOptions === 'object' && cwdOrOptions?.configPath
       ? resolve(basePath, cwdOrOptions.configPath)
       : resolve(basePath, CONFIG_DIR, CONFIG_FILE);
+  const enableLocal =
+    typeof cwdOrOptions !== 'object' || cwdOrOptions?.localOverrides !== false;
 
-  if (!existsSync(configPath)) {
-    return { ...DEFAULT_CONFIG };
+  /**
+   * 合并配置：默认配置 ← 主配置 ← 本地覆盖配置（后者优先级更高）。
+   * 任一配置缺失时跳过，任一解析失败时给出告警并继续用其余配置。
+   */
+  const loadAndMerge = (
+    from: Record<string, unknown>,
+    path: string,
+  ): Record<string, unknown> => {
+    try {
+      const raw = readFileSync(path, 'utf-8');
+      const parsed = JSON.parse(raw) as unknown as Record<string, unknown>;
+      return deepMerge(from, parsed);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(
+        `[release-toolkit] 配置文件 ${path} 读取或解析失败，已跳过：${msg}`,
+      );
+      return from;
+    }
+  };
+
+  // 1. 主配置（如缺失则跳过，保持默认配置）
+  let merged = JSON.parse(JSON.stringify(DEFAULT_CONFIG)) as unknown as Record<
+    string,
+    unknown
+  >;
+  if (existsSync(configPath)) {
+    merged = loadAndMerge(merged, configPath);
   }
 
-  try {
-    const raw = readFileSync(configPath, 'utf-8');
-    const userConfig = JSON.parse(raw) as unknown as Record<string, unknown>;
-    const merged = deepMerge(DEFAULT_CONFIG, userConfig);
-    return merged as unknown as ReleaseToolkitConfig;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(
-      `[release-toolkit] 配置文件 ${configPath} 解析失败，已回退到默认配置：${msg}`,
-    );
-    return JSON.parse(JSON.stringify(DEFAULT_CONFIG)) as ReleaseToolkitConfig;
+  // 2. 本地覆盖配置 `.local/config.json`（与主配置同级，优先级最高）
+  if (enableLocal) {
+    const localPath = resolve(dirname(configPath), LOCAL_CONFIG_DIR, LOCAL_CONFIG_FILE);
+    if (existsSync(localPath)) {
+      merged = loadAndMerge(merged, localPath);
+    }
   }
+
+  return merged as unknown as ReleaseToolkitConfig;
 }
 
 function deepMerge(
@@ -294,4 +333,4 @@ export {
   resolveGitTagName,
   resolveGitTagMessage,
 } from './git-tag-format.js';
-export { CONFIG_DIR, CONFIG_FILE, DEFAULT_CONFIG };
+export { CONFIG_DIR, CONFIG_FILE, LOCAL_CONFIG_DIR, DEFAULT_CONFIG };
