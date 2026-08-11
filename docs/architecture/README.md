@@ -10,7 +10,7 @@
 | 包管理器 | pnpm@9.15.0 |
 | Node 版本 | >=24.0.0 |
 | 模块格式 | ESM (TypeScript) |
-| 构建工具 | tsdown |
+| 构建工具 | Vite + vite-plugin-dts |
 | 许可证 | MIT |
 
 ## 文档目录

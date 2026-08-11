@@ -4,12 +4,12 @@
   "description": "CLI entry point for release-toolkit",
   "type": "module",
   "bin": {
-    "release": "./dist/index.mjs"
+    "release": "./dist/index.js"
   },
-  "main": "./dist/index.mjs",
+  "main": "./dist/index.js",
   "scripts": {
-    "build": "tsdown --config tsdown.config.ts",
-    "dev": "tsdown --config tsdown.config.ts --watch",
+    "build": "vite build && chmod +x dist/index.js",
+    "dev": "vite build --watch",
     "type-check": "tsc --noEmit"
   },
   "files": [

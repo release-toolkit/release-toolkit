@@ -3,17 +3,17 @@
   "version": "0.0.0",
   "description": "Changelog formatters and presets for release-toolkit",
   "type": "module",
-  "main": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.mts",
-      "import": "./dist/index.mjs"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
   },
   "scripts": {
-    "build": "tsdown --config tsdown.config.ts",
-    "dev": "tsdown --config tsdown.config.ts --watch",
+    "build": "vite build",
+    "dev": "vite build --watch",
     "type-check": "tsc --noEmit"
   },
   "files": ["dist", "README.md"],

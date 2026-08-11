@@ -11,10 +11,9 @@ release-toolkit/
 │   ├── cli/               # CLI 入口：commander 命令行工具
 │   ├── changelog-presets/ # 预设格式化器：emoji、分类分组等
 │   └── app-server/        # GitHub App 服务端（Cloudflare Worker）
-├── tsdown.config.ts       # 共享构建配置
 ├── pnpm-workspace.yaml    # 工作区配置
 ├── eslint.config.js       # ESLint 配置
-└── package.json           # 根配置
+└── package.json           # 根配置（Vite + vite-plugin-dts 构建）
 ```
 
 ## 包依赖关系图
@@ -65,12 +64,12 @@ flowchart TB
 
 | 包名 | 职责 | 入口文件 |
 |------|------|----------|
-| `@release-toolkit/types` | 共享 TypeScript 类型定义（零运行时依赖） | `dist/index.mjs` |
-| `@release-toolkit/markdown` | Markdown 工具函数（列表、RELEASE-LOG 解析、emoji 前缀） | `dist/index.mjs` |
-| `@release-toolkit/core` | 版本检测、changelog 引擎、插件系统、CI 层 | `dist/index.mjs` |
-| `@release-toolkit/cli` | 命令行界面 | `dist/index.mjs` |
-| `@release-toolkit/changelog-presets` | 预设格式化器 | `dist/index.mjs` |
-| `@release-toolkit/app-server` | GitHub App Webhook（Cloudflare Worker） | `dist/index.mjs` |
+| `@release-toolkit/types` | 共享 TypeScript 类型定义（零运行时依赖） | `dist/index.js` |
+| `@release-toolkit/markdown` | Markdown 工具函数（列表、RELEASE-LOG 解析、emoji 前缀） | `dist/index.js` |
+| `@release-toolkit/core` | 版本检测、changelog 引擎、插件系统、CI 层 | `dist/index.js` |
+| `@release-toolkit/cli` | 命令行界面 | `dist/index.js` |
+| `@release-toolkit/changelog-presets` | 预设格式化器 | `dist/index.js` |
+| `@release-toolkit/app-server` | GitHub App Webhook（Cloudflare Worker） | `dist/index.js` |
 
 ## 核心功能
 
@@ -85,7 +84,7 @@ flowchart TB
 | 技术 | 用途 |
 |------|------|
 | TypeScript | 类型安全 |
-| tsdown | 快速构建 ESM 库 |
+| Vite + vite-plugin-dts | 快速构建 ESM 库并生成类型声明 |
 | commander | CLI 参数解析 |
 | octokit | GitHub API 客户端 |
 | simple-git | Git 操作（CI runner） |
@@ -94,13 +93,35 @@ flowchart TB
 
 ## 构建配置
 
+各包在 `vite.config.ts` 中使用 Vite 库模式（`build.lib`）+ `vite-plugin-dts` 生成类型声明。
+Node 类库（core / cli）通过 `build.ssr: true` 保持 `node:*` 外部；
+`app-server`（Cloudflare Worker）通过 `rollupOptions.external: []` 将全部依赖内联为单文件。
+
 ```typescript
-// tsdown.config.ts
+// packages/<name>/vite.config.ts
+import { defineConfig } from 'vite';
+import dts from 'vite-plugin-dts';
+
 export default defineConfig({
-  format: ['esm'],      // 仅输出 ESM 格式
-  dts: true,            // 生成 .d.ts 类型声明
-  sourcemap: false,     // 不生成 sourcemap
-  clean: true,          // 每次构建前清理
+  build: {
+    lib: {
+      entry: 'src/index.ts',
+      formats: ['es'],
+      fileName: 'index',
+    },
+    outDir: 'dist',
+    emptyOutDir: true,
+    sourcemap: false,
+    minify: false,
+    target: 'es2022',
+  },
+  plugins: [
+    dts({
+      include: ['src'],
+      exclude: ['src/**/__tests__/**'],
+      insertTypesEntry: true,
+    }),
+  ],
 });
 ```
 
