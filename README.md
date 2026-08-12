@@ -128,6 +128,53 @@ graph LR
 
 CLI 支持 `--config-path` 指定配置文件（默认 `.release-toolkit/config.json`）。
 
+## GitHub ⇄ CNB 代码同步
+
+本仓库已配置 **CNB ↔ GitHub 双向代码同步**，通过 [git-sync](https://cnb.cool/cnb/plugins/tencentcom/git-sync) 插件实现。
+
+### 同步方向
+
+两个方向均基于 **push 事件实时同步**：
+
+| 方向 | 触发方式 | 配置位置 |
+|------|----------|----------|
+| CNB → GitHub | CNB push 事件实时同步 | `.cnb.yml` |
+| GitHub → CNB | GitHub push 事件实时同步 | `.github/workflows/sync-to-cnb.yml` |
+
+### 配置步骤
+
+#### 1. 创建 CNB 密钥仓库
+
+1. 在 [CNB 新建仓库](https://cnb.cool/new/repos) 页面选择「**密钥仓库**」类型
+2. 创建后添加 `github-secrets.yml` 文件：
+
+```yaml
+GITHUB_USERNAME: "<你的 GitHub 用户名>"
+GITHUB_ACCESS_TOKEN: "<你的 GitHub Personal Access Token>"
+```
+
+#### 2. 创建 GitHub Token
+
+GitHub → **Settings** → **Developer settings** → **Personal access tokens** → **Generate new token**
+
+需要勾选 **`repo`** 权限（用于推送代码）。
+
+#### 3. 修改配置文件
+
+在 `.cnb.yml` 和 `.github/workflows/sync-to-cnb.yml` 中替换：
+- `target_url` / `PLUGIN_TARGET_URL`：改为你的目标仓库地址（CNB → GitHub 指向 GitHub 仓库，GitHub → CNB 指向 CNB 仓库）
+- `imports` 中的密钥仓库 URL：改为你的密钥仓库文件地址
+
+> **注意**：`.cnb.yml` 中的 `imports` 需指向密钥仓库中的 `github-secrets.yml`，请将
+> `https://cnb.cool/rss1102.cnb/release-toolkit-secrets/-/blob/main/github-secrets.yml`
+> 替换为实际地址。
+
+#### 4. 配置 GitHub 侧 Secrets（GitHub → CNB 方向）
+
+`GitHub → CNB` 方向通过 `.github/workflows/sync-to-cnb.yml` 在 **push 事件**触发时实时同步，需在 GitHub 仓库配置 Secrets：
+- `CNB_USERNAME`：你的 CNB 用户名
+- `CNB_ACCESS_TOKEN`：你的 CNB 访问令牌（Settings → 访问令牌，需 repo 权限）
+
 ## 配置
 
 在项目根目录创建 `.release-toolkit/config.json`：

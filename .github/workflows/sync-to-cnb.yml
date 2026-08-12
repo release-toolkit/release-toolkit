@@ -1,0 +1,48 @@
+# =============================================================
+# GitHub Actions：GitHub → CNB 实时同步（push 事件触发）
+#
+# 功能：当代码 push 到 GitHub 时，实时同步到 CNB 仓库
+#
+# 使用前准备：
+#   在 GitHub 仓库 Settings → Secrets and variables → Actions 中添加：
+#   - CNB_USERNAME: 你的 CNB 用户名
+#   - CNB_ACCESS_TOKEN: 你的 CNB 访问令牌
+#     （可在 CNB → 个人头像 → 设置 → 访问令牌 中创建，需 repo 权限）
+#
+# 说明：
+#   - 通过 on: push 事件触发，实现 GitHub → CNB 的实时同步
+#   - 使用 actions/checkout 检出当前 push 的分支，再推送至 CNB
+#   - 默认同步 dev 及所有分支；如需限定分支可在 push 下加 branches 过滤
+# =============================================================
+
+name: Sync to CNB
+
+on:
+  push:
+    # 默认所有分支 push 都触发；可按需限定分支，例如：
+    #   branches:
+    #     - dev
+    #     - main
+  # 也支持手动触发
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sync to CNB Repository
+        uses: docker://tencentcom/git-sync
+        env:
+          # 请替换为你的 CNB 仓库地址
+          PLUGIN_TARGET_URL: "https://cnb.cool/rss1102.cnb/release-toolkit.git"
+          PLUGIN_AUTH_TYPE: "https"
+          PLUGIN_USERNAME: ${{ secrets.CNB_USERNAME }}
+          PLUGIN_PASSWORD: ${{ secrets.CNB_ACCESS_TOKEN }}
+          PLUGIN_SYNC_MODE: "push"
+          PLUGIN_FORCE: "true"
+          PLUGIN_PUSH_TAGS: "true"
