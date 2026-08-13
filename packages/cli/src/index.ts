@@ -32,7 +32,7 @@ program
     'after',
     `
 更多信息：
-  - 完整文档：https://github.com/rss1102/release-toolkit
+  - 完整文档：https://github.com/release-toolkit/release-toolkit
   - 配置参考：.release-toolkit/config.json（可用 --config-path 覆盖）
   - GitHub Actions 模板：.github/workflows/release-{collect,publish}.yml
 `,
