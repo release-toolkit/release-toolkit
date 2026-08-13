@@ -27,7 +27,7 @@ $:  # 匹配所有未明确指定的分支
     - name: sync-to-github
       imports:
         # 请替换为你的密钥仓库文件地址
-        - https://cnb.cool/release-toolkit/secret/-/blob/main/github-secrets.yml
+        - https://cnb.cool/release-toolkit/secret/-/blob/main/secret.yml
       stages:
         - name: sync-to-github
           image: tencentcom/git-sync
