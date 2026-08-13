@@ -9,3 +9,4 @@ allowBuilds:
 overrides:
   undici: '>=6.24.0'
   esbuild: '>=0.25.0'
+  js-yaml: '4.2.0'
