@@ -39,7 +39,7 @@ jobs:
         uses: docker://tencentcom/git-sync
         env:
           # 请替换为你的 CNB 仓库地址
-          PLUGIN_TARGET_URL: "https://cnb.cool/release-toolkit/release-toolkit.git"
+          PLUGIN_TARGET_URL: "https://cnb.cool/rss1102.cnb/release-toolkit.git"
           PLUGIN_AUTH_TYPE: "https"
           PLUGIN_USERNAME: ${{ secrets.CNB_USERNAME }}
           PLUGIN_PASSWORD: ${{ secrets.CNB_ACCESS_TOKEN }}
