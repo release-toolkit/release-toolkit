@@ -8,8 +8,8 @@
 #
 # ⚠️ 使用前必读：
 #   1. 创建 CNB「密钥仓库」并添加 github-secrets.yml 文件：
-#      GITHUB_USERNAME: "<你的 GitHub 用户名>"
-#      GITHUB_ACCESS_TOKEN: "<你的 GitHub Personal Access Token>"
+#      RELEASE_TOOLKIT_USERNAME: "<你的 GitHub 用户名>"
+#      RELEASE_TOOLKIT_GITHUB_TOKEN: "<你的 GitHub Personal Access Token>"
 #   2. 将 imports 中的 URL 替换为你的密钥仓库文件地址
 #   3. 将 target_url 替换为你的 GitHub 仓库地址
 #   4. GitHub → CNB 方向需在 GitHub 仓库配置 CNB 访问令牌 Secrets：
@@ -27,7 +27,7 @@ $:  # 匹配所有未明确指定的分支
     - name: sync-to-github
       imports:
         # 请替换为你的密钥仓库文件地址
-        - https://cnb.cool/rss1102.cnb/release-toolkit-secrets/-/blob/main/github-secrets.yml
+        - https://cnb.cool/release-toolkit/secret/-/blob/main/github-secrets.yml
       stages:
         - name: sync-to-github
           image: tencentcom/git-sync
@@ -35,8 +35,8 @@ $:  # 匹配所有未明确指定的分支
             # 请替换为你的 GitHub 仓库地址
             target_url: https://github.com/rss1102/release-toolkit.git
             auth_type: https
-            username: ${GITHUB_USERNAME}
-            password: ${GITHUB_ACCESS_TOKEN}
+            username: ${RELEASE_TOOLKIT_USERNAME}
+            password: ${RELEASE_TOOLKIT_GITHUB_TOKEN}
             force: true
             push_tags: true
 
@@ -46,7 +46,7 @@ dev:  # 默认开发分支
     - name: sync-to-github
       imports:
         # 请替换为你的密钥仓库文件地址
-        - https://cnb.cool/rss1102.cnb/release-toolkit-secrets/-/blob/main/github-secrets.yml
+        - https://cnb.cool/release-toolkit/secret/-/blob/main/github-secrets.yml
       stages:
         - name: sync-to-github
           image: tencentcom/git-sync
@@ -54,7 +54,7 @@ dev:  # 默认开发分支
             # 请替换为你的 GitHub 仓库地址
             target_url: https://github.com/rss1102/release-toolkit.git
             auth_type: https
-            username: ${GITHUB_USERNAME}
-            password: ${GITHUB_ACCESS_TOKEN}
+            username: ${RELEASE_TOOLKIT_USERNAME}
+            password: ${RELEASE_TOOLKIT_GITHUB_TOKEN}
             force: true
             push_tags: true

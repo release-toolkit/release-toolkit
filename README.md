@@ -149,8 +149,8 @@ CLI 支持 `--config-path` 指定配置文件（默认 `.release-toolkit/config.
 2. 创建后添加 `github-secrets.yml` 文件：
 
 ```yaml
-GITHUB_USERNAME: "<你的 GitHub 用户名>"
-GITHUB_ACCESS_TOKEN: "<你的 GitHub Personal Access Token>"
+RELEASE_TOOLKIT_USERNAME: "<你的 GitHub 用户名>"
+RELEASE_TOOLKIT_GITHUB_TOKEN: "<你的 GitHub Personal Access Token>"
 ```
 
 #### 2. 创建 GitHub Token
@@ -166,7 +166,7 @@ GitHub → **Settings** → **Developer settings** → **Personal access tokens*
 - `imports` 中的密钥仓库 URL：改为你的密钥仓库文件地址
 
 > **注意**：`.cnb.yml` 中的 `imports` 需指向密钥仓库中的 `github-secrets.yml`，请将
-> `https://cnb.cool/rss1102.cnb/release-toolkit-secrets/-/blob/main/github-secrets.yml`
+> `https://cnb.cool/release-toolkit/secret/-/blob/main/github-secrets.yml`
 > 替换为实际地址。
 
 #### 4. 配置 GitHub 侧 Secrets（GitHub → CNB 方向）
