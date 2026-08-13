@@ -7,7 +7,7 @@
 #      （见 .github/workflows/sync-to-cnb.yml）
 #
 # ⚠️ 使用前必读：
-#   1. 创建 CNB「密钥仓库」并添加 github-secrets.yml 文件：
+#   1. 创建 CNB「密钥仓库」并添加 secret.yml 文件：
 #      RELEASE_TOOLKIT_USERNAME: "<你的 GitHub 用户名>"
 #      RELEASE_TOOLKIT_GITHUB_TOKEN: "<你的 GitHub Personal Access Token>"
 #   2. 将 imports 中的 URL 替换为你的密钥仓库文件地址
@@ -46,7 +46,7 @@ dev:  # 默认开发分支
     - name: sync-to-github
       imports:
         # 请替换为你的密钥仓库文件地址
-        - https://cnb.cool/release-toolkit/secret/-/blob/main/github-secrets.yml
+        - https://cnb.cool/release-toolkit/secret/-/blob/main/secret.yml
       stages:
         - name: sync-to-github
           image: tencentcom/git-sync
