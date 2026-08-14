@@ -26,7 +26,7 @@
     "README.md"
   ],
   "dependencies": {
-    "js-yaml": "^4.1.0",
+    "js-yaml": "4.2.0",
     "semver": "^7.6.0",
     "simple-git": "^3.25.0",
     "@release-toolkit/changelog-presets": "workspace:*",

@@ -1,0 +1,60 @@
+# =============================================================
+# CNB 流水线配置：GitHub ⇄ CNB 双向实时代码同步（push 事件触发）
+#
+# 功能：
+#   1. CNB → GitHub：代码 push 到 CNB 时自动同步到 GitHub（实时）
+#   2. GitHub → CNB：由 GitHub Actions 的 on: push 事件实时同步到 CNB
+#      （见 .github/workflows/sync-to-cnb.yml）
+#
+# ⚠️ 使用前必读：
+#   1. 创建 CNB「密钥仓库」并添加 secret.yml 文件：
+#      RELEASE_TOOLKIT_USERNAME: "<你的 GitHub 用户名>"
+#      RELEASE_TOOLKIT_GITHUB_TOKEN: "<你的 GitHub Personal Access Token>"
+#   2. 将 imports 中的 URL 替换为你的密钥仓库文件地址
+#   3. 将 target_url 替换为你的 GitHub 仓库地址
+#   4. GitHub → CNB 方向需在 GitHub 仓库配置 CNB 访问令牌 Secrets：
+#      - CNB_USERNAME: 你的 CNB 用户名
+#      - CNB_ACCESS_TOKEN: 你的 CNB 访问令牌（需 repo 权限）
+#
+# 密钥仓库创建：https://cnb.cool/new/repos → 选择「密钥仓库」类型
+# GitHub Token 创建：GitHub → Settings → Developer settings → Personal access tokens
+#   - 需勾选 repo 权限（用于推送代码）
+# =============================================================
+
+$:  # 匹配所有未明确指定的分支
+  # ==================== CNB → GitHub（其他分支，push 实时同步） ====================
+  push:
+    - name: sync-to-github
+      imports:
+        # 请替换为你的密钥仓库文件地址
+        - https://cnb.cool/release-toolkit/secret/-/blob/main/secret.yml
+      stages:
+        - name: sync-to-github
+          image: tencentcom/git-sync
+          settings:
+            # 请替换为你的 GitHub 仓库地址
+            target_url: https://github.com/release-toolkit/release-toolkit.git
+            auth_type: https
+            username: ${RELEASE_TOOLKIT_USERNAME}
+            password: ${RELEASE_TOOLKIT_GITHUB_TOKEN}
+            force: true
+            push_tags: true
+
+dev:  # 默认开发分支
+  # ==================== CNB → GitHub（dev 分支，push 实时同步） ====================
+  push:
+    - name: sync-to-github
+      imports:
+        # 请替换为你的密钥仓库文件地址
+        - https://cnb.cool/release-toolkit/secret/-/blob/main/secret.yml
+      stages:
+        - name: sync-to-github
+          image: tencentcom/git-sync
+          settings:
+            # 请替换为你的 GitHub 仓库地址
+            target_url: https://github.com/release-toolkit/release-toolkit.git
+            auth_type: https
+            username: ${RELEASE_TOOLKIT_USERNAME}
+            password: ${RELEASE_TOOLKIT_GITHUB_TOKEN}
+            force: true
+            push_tags: true
