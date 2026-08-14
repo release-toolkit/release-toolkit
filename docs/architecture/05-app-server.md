@@ -9,6 +9,8 @@ App Server 是一个 **轻量的事件分发层**，运行在 Cloudflare Workers
 - 监听 `pull_request_review.submitted` (`state=approved`) 自动写入 PR 描述体
 - PR 合并到目标分支后，通过 `workflow_dispatch` 触发 CI 中的 `release-publish.yml`，
   由 Actions runner 执行 `@release-toolkit/core` 的 `publishRelease`（依赖 Node + git）
+- 接收 `repository_dispatch`（`event_type=release-toolkit-collect/write/publish`）作为手动重试入口，
+  webhook 错过或失败时可用 `gh api .../dispatches` 重跑 collect / 写入描述体 / publish
 
 > 完整的 tag/Release 创建仍在 CI runner 中执行，Worker 仅负责事件分发和评论。
 
@@ -22,6 +24,7 @@ App Server 是一个 **轻量的事件分发层**，运行在 Cloudflare Workers
 | `pull_request` 事件处理 | ✅ 已实现 | `opened`/`reopened`/`synchronize`/`edited`/`ready_for_review` |
 | `pull_request_review.submitted` (approved) | ✅ 已实现 | 写入 PR 描述体 `RELEASE-TOOLKIT-OUTPUT` 标记区 |
 | `pull_request.closed (merged)` | ✅ 已实现 | 触发 `release-publish.yml` workflow |
+| `repository_dispatch` 手动重试 | ✅ 已实现 | `event_type=release-toolkit-collect/write/publish`，webhook 错过/失败时用 `gh api .../dispatches` 重跑 collect / 写入描述体 / publish |
 | base 分支过滤 | ✅ 已实现 | 通过 `RELEASE_BASE_BRANCH` env |
 | 输出区块开关 | ✅ 已实现 | 优先读仓库 `config.json` → `prLogCollector.outputSections`，回退 `OUTPUT_SECTIONS` env |
 | 通过 `installation.id` 获取 octokit | ✅ 已实现 | `App.getInstallationOctokit` |
@@ -64,6 +67,10 @@ flowchart TD
     E -->|pull_request_review| L{action=submitted<br/>+ state=approved<br/>+ base 命中?}
     L -->|是| M[runConfirmAndWriteToBody<br/>→ 更新 PR 描述体]
     L -->|否| N[忽略]
+
+    E -->|repository_dispatch| P{event_type}
+    P -->|release-toolkit-publish| Q[workflow_dispatch<br/>release-publish.yml]
+    P -->|release-toolkit-collect / write| R[buildPRContext → collect / 写描述体]
 
     E -->|其他| O[忽略]
 ```
