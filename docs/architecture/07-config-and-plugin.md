@@ -7,11 +7,11 @@
 | 配置加载 (`loadConfig`) | ✅ 已实现 | 从 `.release-toolkit/config.json` 加载配置 |
 | `ReleaseToolkitConfig` 类型 | ✅ 已实现 | 配置类型定义 |
 | `DEFAULT_CONFIG` | ✅ 已实现 | 默认配置常量 |
-| 配置继承 | 🔲 规划中 | 多配置文件继承机制 |
+| 配置继承 | ✅ 已实现 | 多配置文件继承机制 |
 | `ChangelogFormatter` | ✅ 已实现 | 日志格式化器接口 |
 | `loadPlugins` / `applyFormatters` | ✅ 已实现 | 插件加载和应用 |
 | `IPlugin` 通用插件接口 | ⚠️ 类型已就位 | `loadPluginsAsIPlugin` + `HookRunner` 已接通；内置 preset 未实现生命周期钩子 |
-| `ILogParser` 自定义日志解析 | ⚠️ 类型已就位 | `loadLogParser` 可加载；默认解析仍走 `parseChangelog` |
+| `ILogParser` 自定义日志解析 | ✅ 已实现 | `loadLogParser` 已接入配置；默认解析仍走 `parseChangelog` |
 | `ILineFormatter` / `ILogFormatter` | ⚠️ 类型已就位 | 已在 `shared/types.ts` 定义，loader 兼容 |
 
 ---
@@ -30,6 +30,7 @@
 | `prLogCollector.releaseLogMarker` | `<!-- RELEASE-LOG-START/END -->` | ✅ | PR 日志标记 |
 | `prLogCollector.outputSections` | 全部启用 | ✅ | App Server 优先读仓库 `.release-toolkit/config.json`；`OUTPUT_SECTIONS` env 为回退 |
 | `prLogCollector.logExtraction` | `source: "comment"` | ✅ | `comment` 从 PR 评论读取标记区；`pr-body` 仅读描述体；找不到时回退 body |
+| `prLogCollector.logParser` | `"default"` | ✅ | 自定义日志解析器名（内置 `default` 或模块名/文件路径），替换默认 `parseChangelog` |
 | `releasePreview.workspaceFile` | `"pnpm-workspace.yaml"` | ✅ | Monorepo 配置文件；Worker/API 模式从 GitHub 读取该文件解析 `packages` |
 | `releasePreview.noChangeMessage` | 内置中文提示 | ✅ | 无版本变更时的提示 |
 | `releasePreview.previewOutput` | 全部 `true` | ✅ | 控制预览评论中版本表 / 包列表 / changelog 显隐 |
@@ -176,7 +177,7 @@ release publish --config-path ./my-config.json
 
 ---
 
-## 配置继承 (规划中 🔲)
+## 配置继承 (已实现 ✅)
 
 支持从多个配置文件继承：
 

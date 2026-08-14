@@ -130,4 +130,22 @@ describe('publishRelease', () => {
 
     expect(vi.mocked(createGithubRelease)).toHaveBeenCalled();
   });
+
+  it('should use options.branch to override config.branches.base', async () => {
+    vi.mocked(detectVersionChanges).mockResolvedValue([]);
+
+    await publishRelease({ branch: 'feature-x' });
+
+    // 第一个参数为目标分支（base），应优先取 options.branch
+    expect(vi.mocked(detectVersionChanges).mock.calls[0][0]).toBe('feature-x');
+  });
+
+  it('should fall back to config.branches.base when branch option is absent', async () => {
+    vi.mocked(detectVersionChanges).mockResolvedValue([]);
+
+    await publishRelease({});
+
+    // mock loadConfig 返回 branches.base = 'main'
+    expect(vi.mocked(detectVersionChanges).mock.calls[0][0]).toBe('main');
+  });
 });

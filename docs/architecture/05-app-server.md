@@ -38,7 +38,7 @@ packages/app-server/
 │   ├── index.ts              # Worker 入口（Webhook 路由）
 │   ├── format.ts             # 评论组装（复用 @release-toolkit/markdown）
 │   └── version-resolve.ts    # 版本检测（委托 core Compare + Contents API）
-├── tsdown.config.ts
+├── vite.config.ts            # Vite 库模式，内联全部依赖为单文件
 ├── wrangler.toml             # Cloudflare Workers 配置
 └── package.json
 ```

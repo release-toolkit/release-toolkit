@@ -94,6 +94,8 @@ export async function previewRelease(
       cwd: options.cwd,
       configPath: options.configPath,
     });
+    // 目标分支：优先使用 --branch 覆盖，其次读取配置 branches.base
+    const baseBranch = options.branch ?? config.branches.base;
     const hookRunner = new HookRunner([]);
 
     // 1. 加载插件
@@ -112,7 +114,6 @@ export async function previewRelease(
     });
 
     // 3. 执行核心逻辑
-    let versionDiffs: VersionDiffResult[];
     let aggregatedLog: string;
 
     const headRef = IS_WORKER
@@ -134,15 +135,15 @@ export async function previewRelease(
         : { cwd: options.cwd },
     );
 
-    versionDiffs = await detectVersionChanges(
-      config.branches.base,
+    const versionDiffs: VersionDiffResult[] = await detectVersionChanges(
+      baseBranch,
       headRef,
       workspacePatterns.length > 0 ? workspacePatterns : ['packages/*'],
       options.cwd,
     );
 
     if (IS_WORKER) {
-      aggregatedLog = await aggregateReleaseLogsByAPI(config.branches.base);
+      aggregatedLog = await aggregateReleaseLogsByAPI(baseBranch);
     } else {
       aggregatedLog = aggregateReleaseLogs(options.cwd);
     }

@@ -43,7 +43,7 @@ export async function publishRelease(
       { cwd },
     );
     const diffs = await detectVersionChanges(
-      config.branches.base,
+      options.branch ?? config.branches.base,
       'HEAD',
       workspacePatterns.length > 0 ? workspacePatterns : ['packages/*'],
       cwd,

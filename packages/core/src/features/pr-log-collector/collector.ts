@@ -2,12 +2,12 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { diffFiles } from '../../shared/git/git-reader.js';
 import { loadConfig } from '../../shared/config/index.js';
-import type { GithubContext, ReleaseHookContext, PRLogCollectorResult } from '../../shared/types.js';
+import type { GithubContext, ReleaseHookContext, PRLogCollectorResult, ChangelogEntry } from '../../shared/types.js';
 import { getPR, updatePR } from '../../shared/github/api-client.js';
 import { parseReleaseLogFromText, resolveReleaseLogText } from './log-source.js';
 import type { PackageChangeLog } from './release-log-extractor.js';
 import type { PRLogCollectorOptions, PRMeta } from './types.js';
-import { loadPlugins, loadPluginsAsIPlugin } from '../../shared/plugins/index.js';
+import { loadPlugins, loadPluginsAsIPlugin, loadLogParser } from '../../shared/plugins/index.js';
 import { HookRunner } from '../../shared/hook-runner.js';
 import { upsertOutputInBody } from '@release-toolkit/markdown';
 import { IS_WORKER } from '../../shared/utils.js';
@@ -101,6 +101,14 @@ export async function collectPRLog(options: PRLogCollectorOptions): Promise<PRLo
     if (formatterErrors.length > 0) {
       for (const e of formatterErrors) console.warn(`[collect] ${e}`);
     }
+
+    // 自定义日志解析器（替换默认 parseChangelog）
+    const logParserName = config.prLogCollector?.logParser ?? 'default';
+    const parseLog =
+      logParserName !== 'default'
+        ? (await loadLogParser(logParserName)).parse
+        : undefined;
+
     const markdown = await generateStructuredMarkdown(
       meta.number,
       meta.title,
@@ -110,6 +118,7 @@ export async function collectPRLog(options: PRLogCollectorOptions): Promise<PRLo
       options.cwd,
       formatters,
       IS_WORKER,
+      parseLog,
     );
 
     // 更新 PR 描述体（幂等）
@@ -160,6 +169,7 @@ async function generateStructuredMarkdown(
   cwd: string | undefined,
   loadedFormatters: Awaited<ReturnType<typeof loadPlugins>>['formatters'],
   skipGitOps = false,
+  parseLog?: (text: string) => ChangelogEntry[],
 ): Promise<string> {
   const base = cwd || process.cwd();
   const changedPackages = skipGitOps ? [] : await detectChangedPackages(baseRef, headRef, base);
@@ -215,7 +225,7 @@ async function generateStructuredMarkdown(
     lines.push(formatTitleBullet(title, loadedFormatters));
 
     const changeLog = packageLogMap.get(pkg) ?? '';
-    for (const bullet of formatChangeLogBullets(changeLog, loadedFormatters)) {
+    for (const bullet of formatChangeLogBullets(changeLog, loadedFormatters, parseLog)) {
       lines.push(bullet);
     }
     lines.push('');

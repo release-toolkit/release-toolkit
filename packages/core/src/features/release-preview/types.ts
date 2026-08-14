@@ -11,6 +11,8 @@ export interface ReleasePreviewOptions {
   cwd?: string;
   /** 配置文件路径，相对 cwd 或绝对路径 */
   configPath?: string;
+  /** 覆盖配置 branches.base 的目标分支 */
+  branch?: string;
 }
 
 export interface ReleasePreviewResult {

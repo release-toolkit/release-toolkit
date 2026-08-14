@@ -21,6 +21,7 @@ export {
   loadConfig,
   CONFIG_DIR,
   CONFIG_FILE,
+  LOCAL_CONFIG_DIR,
   DEFAULT_CONFIG,
   applyGitTagTemplate,
   resolveGitTagName,

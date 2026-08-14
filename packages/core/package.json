@@ -3,21 +3,21 @@
   "version": "0.0.0",
   "description": "Core library: version diff, changelog engine, plugin system, CI layer",
   "type": "module",
-  "main": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.mts",
-      "import": "./dist/index.mjs"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./worker": {
-      "types": "./dist/worker.d.mts",
-      "import": "./dist/worker.mjs"
+      "types": "./dist/worker.d.ts",
+      "import": "./dist/worker.js"
     }
   },
   "scripts": {
-    "build": "tsdown --config tsdown.config.ts && tsdown --config tsdown.worker.config.ts",
-    "dev": "tsdown --config tsdown.config.ts --watch",
+    "build": "vite build && vite build --config vite.worker.config.ts",
+    "dev": "vite build --watch",
     "test": "vitest run",
     "type-check": "tsc --noEmit"
   },
