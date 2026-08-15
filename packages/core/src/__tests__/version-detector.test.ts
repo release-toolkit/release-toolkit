@@ -65,8 +65,8 @@ describe('detectVersionChanges', () => {
     mockShowFileContent = vi.mocked(gitReader.showFileContent);
   });
 
-  it('should detect version changes when package.json changes', async () => {
-    mockDiffFiles.mockResolvedValue(['/project/packages/core/package.json']);
+  it('should detect version changes for a sub-package under packages/*', async () => {
+    mockDiffFiles.mockResolvedValue(['packages/core/package.json']);
     mockShowFileContent
       .mockResolvedValueOnce('{"name":"core","version":"1.0.0"}')
       .mockResolvedValueOnce('{"name":"core","version":"1.1.0"}');
@@ -77,6 +77,7 @@ describe('detectVersionChanges', () => {
     expect(result[0]).toMatchObject({
       package: {
         packageName: 'core',
+        packagePath: 'packages/core',
         currentVersion: '1.0.0',
         newVersion: '1.1.0',
       },
@@ -84,8 +85,40 @@ describe('detectVersionChanges', () => {
     });
   });
 
+  it('should detect multiple changed sub-packages under packages/*', async () => {
+    mockDiffFiles.mockResolvedValue([
+      'packages/core/package.json',
+      'packages/ui/package.json',
+    ]);
+    mockShowFileContent
+      .mockResolvedValueOnce('{"name":"core","version":"1.0.0"}')
+      .mockResolvedValueOnce('{"name":"core","version":"1.1.0"}')
+      .mockResolvedValueOnce('{"name":"ui","version":"2.0.0"}')
+      .mockResolvedValueOnce('{"name":"ui","version":"2.1.0"}');
+
+    const result = await detectVersionChanges('main', 'HEAD', ['packages/*'], '/project');
+
+    expect(result).toHaveLength(2);
+    expect(result.map((r) => r.package.packageName).sort()).toEqual(['core', 'ui']);
+  });
+
+  it('should ignore packages outside the workspace glob', async () => {
+    mockDiffFiles.mockResolvedValue([
+      'apps/web/package.json',
+      'packages/core/package.json',
+    ]);
+    mockShowFileContent
+      .mockResolvedValueOnce('{"name":"core","version":"1.0.0"}')
+      .mockResolvedValueOnce('{"name":"core","version":"1.1.0"}');
+
+    const result = await detectVersionChanges('main', 'HEAD', ['packages/*'], '/project');
+
+    expect(result).toHaveLength(1);
+    expect(result[0].package.packageName).toBe('core');
+  });
+
   it('should return empty array when no package.json changes', async () => {
-    mockDiffFiles.mockResolvedValue(['/project/README.md']);
+    mockDiffFiles.mockResolvedValue(['README.md']);
 
     const result = await detectVersionChanges('main', 'HEAD', ['packages/*'], '/project');
 
@@ -93,7 +126,7 @@ describe('detectVersionChanges', () => {
   });
 
   it('should skip packages where file content cannot be read', async () => {
-    mockDiffFiles.mockResolvedValue(['/project/packages/core/package.json']);
+    mockDiffFiles.mockResolvedValue(['packages/core/package.json']);
     mockShowFileContent
       .mockRejectedValueOnce(new Error('File not found'))
       .mockResolvedValueOnce('{"name":"core","version":"1.1.0"}');
@@ -103,21 +136,14 @@ describe('detectVersionChanges', () => {
     expect(result).toHaveLength(0);
   });
 
-  it('should handle multiple packages with mixed changes', async () => {
-    mockDiffFiles.mockResolvedValue([
-      '/project/packages/core/package.json',
-      '/project/packages/ui/package.json',
-    ]);
-
+  it('should skip packages with unchanged version', async () => {
+    mockDiffFiles.mockResolvedValue(['packages/ui/package.json']);
     mockShowFileContent
-      .mockResolvedValueOnce('{"name":"core","version":"1.0.0"}')
-      .mockResolvedValueOnce('{"name":"core","version":"1.1.0"}')
       .mockResolvedValueOnce('{"name":"ui","version":"2.0.0"}')
       .mockResolvedValueOnce('{"name":"ui","version":"2.0.0"}');
 
     const result = await detectVersionChanges('main', 'HEAD', ['packages/*'], '/project');
 
-    expect(result).toHaveLength(1);
-    expect(result[0].package.packageName).toBe('core');
+    expect(result).toHaveLength(0);
   });
 });

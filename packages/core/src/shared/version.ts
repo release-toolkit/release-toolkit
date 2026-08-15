@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import type { VersionDiffResult, PackageVersionInfo } from './types.js';
 import { compareVersions } from './version-compare.js';
 import { IS_WORKER } from './utils.js';
-import { detectVersionChangesByAPI } from './version-api.js';
+import { detectVersionChangesByAPI, matchesWorkspaceFilePath } from './version-api.js';
 
 /**
  * 检测版本变更
@@ -32,39 +32,43 @@ async function detectVersionChangesLocal(
   const diffs: VersionDiffResult[] = [];
   const basePath = cwd || process.cwd();
 
-  const packageDirs = resolvePackageDirs(workspacePatterns, basePath);
+  // 获取 base..head 之间变更的文件（相对仓库根路径），
+  // 与 API 模式对齐：筛选出落在 workspace glob 范围内的 package.json。
+  const changedFiles = await diffFiles(baseRef, headRef, basePath);
+  const changedPkgJsonPaths = changedFiles.filter(
+    (f) => f.endsWith('/package.json') && matchesWorkspaceFilePath(f, workspacePatterns),
+  );
 
-  for (const pkgDir of packageDirs) {
-    const pkgJsonPath = `${pkgDir}/package.json`;
-    const changedFiles = await diffFiles(baseRef, headRef, basePath);
-    const hasPackageJsonChanged = changedFiles.some(
-      (f: string) => f === pkgJsonPath || f.endsWith('/package.json'),
-    );
-
-    if (!hasPackageJsonChanged) continue;
-
+  for (const pkgJsonPath of changedPkgJsonPaths) {
     const oldContent = await showFileContent(baseRef, pkgJsonPath, basePath).catch(() => '');
     const newContent = await showFileContent(headRef, pkgJsonPath, basePath).catch(() => '');
 
     if (!oldContent || !newContent) continue;
 
-    const oldPkg = JSON.parse(oldContent);
-    const newPkg = JSON.parse(newContent);
+    let oldPkg: { name?: string; version?: string };
+    let newPkg: { name?: string; version?: string };
+    try {
+      oldPkg = JSON.parse(oldContent);
+      newPkg = JSON.parse(newContent);
+    } catch {
+      continue;
+    }
 
     const oldVersion = oldPkg.version || '0.0.0';
     const newVersion = newPkg.version || '0.0.0';
 
-    if (oldVersion !== newVersion) {
-      const diffType = compareVersions(oldVersion, newVersion);
-      const pkgInfo: PackageVersionInfo = {
-        packageName: newPkg.name || pkgDir,
-        packagePath: pkgDir,
-        currentVersion: oldVersion,
-        newVersion,
-      };
+    if (oldVersion === newVersion) continue;
 
-      diffs.push({ package: pkgInfo, diffType });
-    }
+    const diffType = compareVersions(oldVersion, newVersion);
+    const pkgDir = pkgJsonPath.replace(/\/package\.json$/, '');
+    const pkgInfo: PackageVersionInfo = {
+      packageName: newPkg.name || pkgDir.split('/').pop() || pkgDir,
+      packagePath: pkgDir,
+      currentVersion: oldVersion,
+      newVersion,
+    };
+
+    diffs.push({ package: pkgInfo, diffType });
   }
 
   return diffs;
