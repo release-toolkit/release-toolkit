@@ -10,6 +10,7 @@
   "scripts": {
     "build": "vite build && chmod +x dist/index.js",
     "dev": "vite build --watch",
+    "test": "vitest run",
     "type-check": "tsc --noEmit"
   },
   "files": [
